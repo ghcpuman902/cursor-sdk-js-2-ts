@@ -451,8 +451,14 @@ export default function Home() {
                             ? {
                                 ...entry,
                                 output: data.toolCall?.result?.value 
-                                  ? String(data.toolCall.result.value)
-                                  : data.toolCall?.result?.error || "",
+                                  ? (typeof data.toolCall.result.value === "string" 
+                                    ? data.toolCall.result.value 
+                                    : JSON.stringify(data.toolCall.result.value, null, 2))
+                                  : data.toolCall?.result?.error 
+                                  ? (typeof data.toolCall.result.error === "string"
+                                    ? data.toolCall.result.error
+                                    : JSON.stringify(data.toolCall.result.error, null, 2))
+                                  : "",
                                 exitCode: data.toolCall?.result?.status === "success" ? 0 : 1,
                                 isRunning: false,
                               }
@@ -738,8 +744,14 @@ export default function Home() {
                           ? {
                               ...entry,
                               output: data.toolCall?.result?.value 
-                                ? String(data.toolCall.result.value)
-                                : data.toolCall?.result?.error || "",
+                                ? (typeof data.toolCall.result.value === "string" 
+                                  ? data.toolCall.result.value 
+                                  : JSON.stringify(data.toolCall.result.value, null, 2))
+                                : data.toolCall?.result?.error 
+                                ? (typeof data.toolCall.result.error === "string"
+                                  ? data.toolCall.result.error
+                                  : JSON.stringify(data.toolCall.result.error, null, 2))
+                                : "",
                               exitCode: data.toolCall?.result?.status === "success" ? 0 : 1,
                               isRunning: false,
                             }

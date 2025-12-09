@@ -83,6 +83,7 @@ export interface ChatMessage {
   toolCalls?: Map<string, ToolCall>;
   summaries?: string[];
   isStreaming?: boolean;
+  lastUpdateTime?: number; // Track when this message last received an update
 }
 
 // Action prompt templates

@@ -236,25 +236,63 @@ ${message}`;
           console.log("Sent session ID:", sessionId);
 
           // Add timeout to detect stuck streams
+          let lastUpdateTime = Date.now();
           const streamTimeout = setTimeout(() => {
             console.error("=== STREAM TIMEOUT (5 minutes) ===");
             sendError(new Error("Agent stream timed out after 5 minutes"));
           }, 5 * 60 * 1000); // 5 minutes
 
+          // Also add a heartbeat to detect if updates stop coming
+          const heartbeatInterval = setInterval(() => {
+            const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+            if (timeSinceLastUpdate > 60000) { // 1 minute with no updates
+              console.warn(`⚠️ No updates for ${Math.floor(timeSinceLastUpdate / 1000)}s - stream may be stuck`);
+            }
+          }, 30000); // Check every 30 seconds
+
           try {
             for await (const update of stream) {
+              lastUpdateTime = Date.now(); // Reset heartbeat timer
               updateCount++;
-              console.log(`[Update #${updateCount}]`, update.type, 
-                'callId' in update ? `(${update.callId})` : "",
-                'text' in update ? `"${update.text.substring(0, 50)}..."` : ""
-              );
+              
+              // Log update with more details
+              const logDetails: string[] = [update.type];
+              if ('callId' in update && update.callId) {
+                logDetails.push(`callId: ${update.callId}`);
+              }
+              if ('text' in update && update.text) {
+                logDetails.push(`text: "${String(update.text).substring(0, 50)}..."`);
+              }
+              if (update.type === 'tool-call-started' && 'toolCall' in update) {
+                logDetails.push(`tool: ${update.toolCall?.type}`);
+              }
+              if (update.type === 'tool-call-completed' && 'toolCall' in update) {
+                const status = update.toolCall?.result?.status || 'unknown';
+                logDetails.push(`result: ${status}`);
+              }
+              
+              console.log(`[Update #${updateCount}]`, logDetails.join(' | '));
               
               // Send each update as a JSON line
-              const data = JSON.stringify(update);
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              // Note: JSON.stringify should handle objects properly
+              // The SDK should be sending serializable data
+              try {
+                const data = JSON.stringify(update);
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              } catch (stringifyError) {
+                console.error(`Failed to stringify update #${updateCount}:`, stringifyError);
+                console.error('Update object:', update);
+                // Send an error update instead
+                const errorData = JSON.stringify({
+                  type: "error",
+                  text: `Failed to serialize agent update: ${stringifyError instanceof Error ? stringifyError.message : 'Unknown error'}`,
+                });
+                controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+              }
             }
 
             clearTimeout(streamTimeout);
+            clearInterval(heartbeatInterval);
             await stream.done;
             
             if (!streamClosed) {
@@ -268,6 +306,7 @@ ${message}`;
             }
           } catch (streamError) {
             clearTimeout(streamTimeout);
+            clearInterval(heartbeatInterval);
             console.error("=== ERROR DURING STREAM ITERATION ===");
             console.error("Stream error:", streamError);
             sendError(streamError);
