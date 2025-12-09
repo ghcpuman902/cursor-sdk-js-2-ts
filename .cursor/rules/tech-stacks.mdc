@@ -1,0 +1,8 @@
+---
+alwaysApply: true
+---
+Please use pnpm for all commands. That includes pnpm add, pnpm run, pnpm dev, pnpm build, etc.
+The main tech stack is Next.js 16 (stably released recently) + Shadcn + Tailwind 4
+Try to use '-primary', '-background' or prioritised tailwind colors over -[#hexcode] hardcoded colors.
+Try to make the main part of the compoenent default font size to keep the design consistent by looking around.
+If user ask you to help with git, always look around before taking any actions so you are doing it on the right branch and can be sure user wont need to resolve conflict. for example, git stash, sync, git stash pop would often make it easier than pull from remote and merge, even if the edits are the same. Help user avoid loosing works by telling user the consequences of the actions you are taking.
