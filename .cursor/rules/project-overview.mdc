@@ -1,0 +1,92 @@
+---
+alwaysApply: true
+---
+
+# Multi-Repo Agent Manager - Project Overview
+
+## Purpose
+
+This is a Next.js web application that leverages the Cursor SDK (`@cursor-ai/january`) to manage and maintain multiple code repositories in parallel. The key innovation is that it can spawn Cursor AI agents across different repositories simultaneously, each working independently in their own workspace context.
+
+## Core Functionality
+
+### 1. Repository Discovery
+- **Repo Scanner**: Users can select a root directory (preset paths like `~/dev`, `~/projects`, or custom paths)
+- **Automatic Detection**: Recursively scans for `package.json` files to identify Node.js/JavaScript projects
+- **Metadata Extraction**: For each discovered repo, extracts:
+  - Project name
+  - Framework type (Next.js, React, Vue, Angular, Svelte, or other)
+  - Framework version
+  - TypeScript usage (yes/no)
+  - Dependencies and devDependencies
+
+### 2. Parallel Agent Execution
+- **Multi-Repo Support**: Each agent runs in its own isolated workspace directory
+- **Independent Sessions**: Agents don't interfere with each other - they operate on completely different codebases
+- **Real-time Streaming**: All agent activity streams live via Server-Sent Events (SSE)
+- **Task Management**: Each agent task is tracked independently with status (pending/running/completed/failed)
+
+### 3. Pre-built Maintenance Actions
+The app provides 5 types of actions users can trigger on any discovered repo:
+
+- **Upgrade to TypeScript**: Converts JavaScript projects to TypeScript (adds tsconfig.json, renames files, adds type annotations)
+- **Upgrade Framework**: Upgrades the main framework (Next.js, React, Vue, etc.) to latest stable version
+- **Summarize Codebase**: Analyzes code and generates comprehensive README.md with project structure and documentation
+- **Update Dependencies**: Checks for outdated dependencies and updates them to latest compatible versions
+- **Custom Prompt**: Allows users to provide their own instructions for the agent
+
+### 4. User Interface
+
+**Three-Panel Layout:**
+- **Left Panel**: Repository scanner and list of discovered projects
+  - Shows repo cards with framework badges, TypeScript indicator, and action buttons
+- **Center Panel**: Active agent view showing streaming output
+  - Displays thinking process, tool calls, responses, and summaries
+- **Right Sidebar**: Task management panel
+  - Lists all running/completed tasks as tabs
+  - Status indicators (spinner for running, checkmark for completed, X for failed)
+  - Click tabs to switch between different agent outputs
+
+## Technical Architecture
+
+### Key Technologies
+- **Next.js 16** (App Router)
+- **React 19** with TypeScript
+- **Tailwind CSS 4** for styling
+- **@cursor-ai/january** SDK for agent functionality
+- **Server-Sent Events** for real-time streaming
+
+### API Endpoints
+- `POST /api/scan-repos`: Scans directory tree for package.json files and extracts repo metadata
+- `POST /api/agent`: Creates/runs Cursor agents with configurable working directory
+
+### Data Flow
+1. User selects root directory → Scanner finds repos → Repos displayed in list
+2. User clicks action button → Agent task created → Agent spawns in repo's directory
+3. Agent streams updates → UI displays in real-time → Task tracked in sidebar
+4. Multiple agents can run simultaneously, each in their own repo workspace
+
+## Use Cases
+
+- **Side Project Maintenance**: Quickly upgrade multiple old projects to latest frameworks
+- **TypeScript Migration**: Convert multiple JavaScript repos to TypeScript in parallel
+- **Documentation**: Generate READMEs for forgotten projects
+- **Dependency Updates**: Keep multiple projects up-to-date with latest dependencies
+- **Custom Automation**: Run any custom maintenance task across multiple repos
+
+## Key Design Principles
+
+1. **Parallelism**: Multiple agents can run simultaneously without conflicts
+2. **Isolation**: Each agent operates in its own workspace directory
+3. **Real-time Feedback**: All agent activity streams live to the UI
+4. **Disposable Workspaces**: Agents don't require Cursor IDE setup - they work in any directory
+5. **Pre-built Actions**: Common maintenance tasks are one-click operations
+
+## Important Notes for AI Assistants
+
+- When adding features, remember agents run in **different directories** - they're not in the main workspace
+- The app manages **multiple concurrent agent sessions** - state management is critical
+- Agent streaming uses **Server-Sent Events** - updates come incrementally
+- Each task has its own **session ID** for multi-turn conversations
+- Repo scanning **skips** node_modules, .git, and other common directories
+- Framework detection is based on **dependency analysis** of package.json
