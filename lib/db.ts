@@ -46,15 +46,8 @@ const loadData = () => {
   try {
     if (fs.existsSync(TASKS_FILE)) {
       const tasksData = JSON.parse(fs.readFileSync(TASKS_FILE, "utf-8"));
-      dataStore.tasks = tasksData.map((task: AgentTask) => ({
-        ...task,
-        messages: task.messages.map((msg: ChatMessage) => ({
-          ...msg,
-          toolCalls: msg.toolCalls
-            ? new Map(Object.entries(msg.toolCalls))
-            : new Map(),
-        })),
-      }));
+      // Messages are now stored with metadata as objects, no Map conversion needed
+      dataStore.tasks = tasksData;
     }
     
     if (fs.existsSync(REPOS_FILE)) {
@@ -68,17 +61,8 @@ const loadData = () => {
 // Save data to disk
 const saveData = () => {
   try {
-    // Save tasks
-    const tasksToSave = dataStore.tasks.map((task) => ({
-      ...task,
-      messages: task.messages.map((msg) => ({
-        ...msg,
-        toolCalls: msg.toolCalls
-          ? Object.fromEntries(msg.toolCalls)
-          : {},
-      })),
-    }));
-    fs.writeFileSync(TASKS_FILE, JSON.stringify(tasksToSave, null, 2), "utf-8");
+    // Save tasks - messages already in JSON-serializable format
+    fs.writeFileSync(TASKS_FILE, JSON.stringify(dataStore.tasks, null, 2), "utf-8");
     
     // Save scanned repos
     fs.writeFileSync(REPOS_FILE, JSON.stringify(dataStore.scannedRepos, null, 2), "utf-8");
@@ -221,7 +205,7 @@ export const dbOperations = {
         (sum, task) =>
           sum +
           task.messages.reduce(
-            (msgSum, msg) => msgSum + (msg.toolCalls?.size || 0),
+            (msgSum, msg) => msgSum + (msg.metadata?.toolCalls ? Object.keys(msg.metadata.toolCalls).length : 0),
             0
           ),
         0

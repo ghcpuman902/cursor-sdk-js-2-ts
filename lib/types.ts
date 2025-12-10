@@ -47,7 +47,7 @@ export interface TerminalOutput {
   toolArgs?: string; // Formatted args for display
 }
 
-// Chat message types (extracted from current page.tsx)
+// Chat message types (AI SDK compatible format)
 export interface ToolCallResult {
   status: string;
   value?: unknown;
@@ -75,15 +75,21 @@ export interface AgentUpdate {
   sessionId?: string;
 }
 
+// AI SDK compatible message format - simpler and more standard
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
-  thinking?: string;
-  toolCalls?: Map<string, ToolCall>;
-  summaries?: string[];
+  // Metadata stored separately from content
+  metadata?: {
+    thinking?: string;
+    toolCalls?: Record<string, ToolCall>; // Store as Record for JSON serialization
+    summaries?: string[];
+    lastUpdateTime?: number;
+  };
+  // Streaming flag
   isStreaming?: boolean;
-  lastUpdateTime?: number; // Track when this message last received an update
+  createdAt?: number;
 }
 
 // Action prompt templates

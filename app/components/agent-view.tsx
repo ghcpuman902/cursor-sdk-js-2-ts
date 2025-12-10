@@ -159,12 +159,16 @@ interface AgentViewProps {
   task: AgentTask | null;
   activeToolCalls: Set<string>;
   onSendMessage?: (taskId: string, message: string) => void;
+  onKillSession?: (taskId: string, sessionId: string) => void;
 }
 
-export const AgentView = ({ task, activeToolCalls, onSendMessage }: AgentViewProps) => {
+export const AgentView = ({ task, activeToolCalls, onSendMessage, onKillSession }: AgentViewProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, setRefreshTrigger] = useState(0);
   const [inputMessage, setInputMessage] = useState("");
+  const [isStuck, setIsStuck] = useState(false);
+  const [stuckDuration, setStuckDuration] = useState(0);
+  const [isKilling, setIsKilling] = useState(false);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -181,6 +185,40 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage }: AgentViewPro
     
     return () => clearInterval(interval);
   }, [activeToolCalls.size]);
+
+  // Detect if agent is stuck (no updates for 10+ seconds while running)
+  useEffect(() => {
+    if (!task || task.status !== "running") {
+      setIsStuck(false);
+      setStuckDuration(0);
+      return;
+    }
+
+    // Find the last streaming message
+    const lastMessage = task.messages[task.messages.length - 1];
+    if (!lastMessage?.isStreaming || !lastMessage.metadata?.lastUpdateTime) {
+      return;
+    }
+
+    const checkStuck = () => {
+      const timeSinceLastUpdate = Date.now() - (lastMessage.metadata?.lastUpdateTime || Date.now());
+      const secondsStuck = Math.floor(timeSinceLastUpdate / 1000);
+      
+      if (secondsStuck >= 10) {
+        setIsStuck(true);
+        setStuckDuration(secondsStuck);
+      } else {
+        setIsStuck(false);
+        setStuckDuration(0);
+      }
+    };
+
+    // Check immediately and then every second
+    checkStuck();
+    const interval = setInterval(checkStuck, 1000);
+    
+    return () => clearInterval(interval);
+  }, [task]);
 
   // Empty state
   if (!task) {
@@ -211,6 +249,32 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage }: AgentViewPro
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       handleOpenInCursor();
+    }
+  };
+
+  const handleKillSession = async () => {
+    if (!task?.sessionId || isKilling) return;
+    
+    setIsKilling(true);
+    try {
+      const response = await fetch(`/api/agent?sessionId=${task.sessionId}`, {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        console.log("✅ Session killed successfully");
+        // Optionally notify parent component
+        if (onKillSession) {
+          onKillSession(task.id, task.sessionId);
+        }
+      } else {
+        const data = await response.json();
+        console.error("Failed to kill session:", data);
+      }
+    } catch (error) {
+      console.error("Error killing session:", error);
+    } finally {
+      setIsKilling(false);
     }
   };
 
@@ -256,6 +320,33 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage }: AgentViewPro
         </div>
       </div>
 
+      {/* Stuck Warning */}
+      {isStuck && status === "running" && (
+        <div className="m-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                <Circle className="w-4 h-4 animate-pulse" />
+                <span className="text-xs font-medium">
+                  Agent appears stuck ({stuckDuration}s with no updates)
+                </span>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                The agent may be processing a slow operation, or it could be hung. You can wait or force stop.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleKillSession}
+              disabled={isKilling}
+              className="ml-3 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 border border-red-200 dark:border-red-900 rounded transition-colors disabled:opacity-50"
+            >
+              {isKilling ? "Stopping..." : "Force Stop"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="m-4 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg">
@@ -291,7 +382,7 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage }: AgentViewPro
                 </div>
                 <div className="flex-1 space-y-2">
                   {/* Thinking */}
-                  {message.thinking && (
+                  {message.metadata?.thinking && (
                     <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-lg p-3">
                       <div className="flex items-center gap-1.5 text-[10px] text-purple-600 dark:text-purple-400 font-medium mb-1">
                         <Sparkles className="w-3 h-3" />
@@ -299,19 +390,19 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage }: AgentViewPro
                       </div>
                       <div className="max-w-full overflow-hidden">
                         <pre className="text-[10px] text-purple-900 dark:text-purple-100 whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-auto max-w-full wrap-break-word">
-                          {message.thinking}
+                          {message.metadata?.thinking}
                         </pre>
                       </div>
                     </div>
                   )}
 
                   {/* Tool Calls */}
-                  {message.toolCalls && message.toolCalls.size > 0 && (
+                  {message.metadata?.toolCalls && Object.keys(message.metadata.toolCalls).length > 0 && (
                     <div className="space-y-1.5">
                       <div className="text-[10px] text-zinc-500 font-medium flex items-center gap-1">
-                        🔧 TOOLS ({message.toolCalls.size})
+                        🔧 TOOLS ({Object.keys(message.metadata.toolCalls).length})
                       </div>
-                      {Array.from(message.toolCalls.entries()).map(
+                      {Object.entries(message.metadata.toolCalls).map(
                         ([callId, toolCall]) => (
                           <ToolCallDisplay
                             key={callId}
@@ -340,13 +431,13 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage }: AgentViewPro
                   )}
 
                   {/* Summaries */}
-                  {message.summaries && message.summaries.length > 0 && (
+                  {message.metadata?.summaries && message.metadata.summaries.length > 0 && (
                     <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
                       <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mb-1">
                         📝 SUMMARY
                       </div>
                       <div className="space-y-1">
-                        {message.summaries.map((summary, idx) => (
+                        {message.metadata.summaries.map((summary, idx) => (
                           <div
                             key={idx}
                             className="max-w-full overflow-hidden"
@@ -363,8 +454,8 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage }: AgentViewPro
                   {/* Streaming indicator */}
                   {message.isStreaming &&
                     !message.content &&
-                    !message.thinking &&
-                    message.toolCalls?.size === 0 && (
+                    !message.metadata?.thinking &&
+                    Object.keys(message.metadata?.toolCalls || {}).length === 0 && (
                       <div className="flex items-center gap-1.5 text-zinc-500">
                         <Loader2 className="w-3 h-3 animate-spin" />
                         <span className="text-[10px]">
@@ -383,59 +474,127 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage }: AgentViewPro
 
       {/* Chat Input - Show when there's an active session */}
       {task && task.sessionId && onSendMessage && (
-        <div className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shrink-0">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (inputMessage.trim() && status !== "running") {
-                onSendMessage(task.id, inputMessage.trim());
-                setInputMessage("");
-              }
-            }}
-            className="flex gap-2"
-          >
+        <div className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
+          {/* Stuck Warning */}
+          {isStuck && (
+            <div className="px-3 pt-3 pb-2">
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <div className="shrink-0 mt-0.5">
+                    <Loader2 className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-spin" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                        Agent appears stuck
+                      </span>
+                      <span className="text-xs text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded">
+                        {stuckDuration}s no activity
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-800 dark:text-amber-200 mb-2">
+                      No updates received for {stuckDuration} seconds. Try sending a message to unstick the agent.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSendMessage(task.id, "Please continue with your task. If you're stuck, let me know what the issue is.");
+                          setIsStuck(false);
+                        }}
+                        className="px-3 py-1.5 text-xs font-medium bg-amber-200 hover:bg-amber-300 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-900 dark:text-amber-100 rounded transition-colors"
+                      >
+                        Send "Continue"
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSendMessage(task.id, "What's your current status? Are you waiting for something?");
+                          setIsStuck(false);
+                        }}
+                        className="px-3 py-1.5 text-xs font-medium bg-amber-200 hover:bg-amber-300 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-900 dark:text-amber-100 rounded transition-colors"
+                      >
+                        Ask Status
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsStuck(false)}
+                        className="ml-auto px-2 py-1 text-xs text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="p-3">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (inputMessage.trim() && (status !== "running" || isStuck)) {
+                  onSendMessage(task.id, inputMessage.trim());
+                  setInputMessage("");
+                  setIsStuck(false);
+                }
+              }}
+              className="flex gap-2"
+            >
             <input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder={
-                status === "running"
+                isStuck
+                  ? "Type a message to unstick the agent..."
+                  : status === "running"
                   ? "Agent is working..."
                   : status === "failed"
                   ? "Task failed - enter message to retry"
                   : "Send a follow-up message..."
               }
-              disabled={status === "running"}
-              className="flex-1 px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500 dark:focus:ring-violet-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={status === "running" && !isStuck}
+              className={`flex-1 px-3 py-2 text-sm border rounded-lg bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                isStuck 
+                  ? "border-amber-400 dark:border-amber-600 focus:ring-amber-500 dark:focus:ring-amber-600" 
+                  : "border-zinc-300 dark:border-zinc-700 focus:ring-violet-500 dark:focus:ring-violet-600"
+              }`}
               aria-label="Follow-up message"
             />
-            <button
-              type="submit"
-              disabled={!inputMessage.trim() || status === "running"}
-              className="px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white rounded-lg flex items-center gap-2 text-sm font-medium transition-colors disabled:cursor-not-allowed"
-              aria-label="Send message"
-            >
-              {status === "running" ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-xs">Working</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  Send
-                </>
-              )}
-            </button>
-          </form>
-          
-          {/* Session indicator */}
-          <div className="flex items-center justify-between mt-2 text-[10px] text-zinc-400 dark:text-zinc-500">
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              <span>Active session: {task.sessionId.slice(0, 8)}</span>
+              <button
+                type="submit"
+                disabled={!inputMessage.trim() || (status === "running" && !isStuck)}
+                className={`px-4 py-2 text-white rounded-lg flex items-center gap-2 text-sm font-medium transition-colors disabled:cursor-not-allowed ${
+                  isStuck
+                    ? "bg-amber-600 hover:bg-amber-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700"
+                    : "bg-violet-600 hover:bg-violet-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700"
+                }`}
+                aria-label="Send message"
+              >
+                {status === "running" && !isStuck ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-xs">Working</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    {isStuck ? "Unstick" : "Send"}
+                  </>
+                )}
+              </button>
+            </form>
+            
+            {/* Session indicator */}
+            <div className="flex items-center justify-between mt-2 text-[10px] text-zinc-400 dark:text-zinc-500">
+              <div className="flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                <span>Active session: {task.sessionId.slice(0, 8)}</span>
+              </div>
+              <span>{task.messages.length} messages in conversation</span>
             </div>
-            <span>{task.messages.length} messages in conversation</span>
           </div>
         </div>
       )}

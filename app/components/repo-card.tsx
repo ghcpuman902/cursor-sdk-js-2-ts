@@ -8,12 +8,16 @@ import {
   Package,
   MessageSquare,
   FolderGit2,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import type { RepoInfo, TaskAction } from "@/lib/types";
 
 interface RepoCardProps {
   repo: RepoInfo;
   onAction: (repo: RepoInfo, action: TaskAction, customPrompt?: string) => void;
+  isSelected?: boolean;
+  onToggleSelection?: (repoPath: string) => void;
 }
 
 const FRAMEWORK_COLORS: Record<string, string> = {
@@ -34,7 +38,12 @@ const FRAMEWORK_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-export const RepoCard = ({ repo, onAction }: RepoCardProps) => {
+export const RepoCard = ({
+  repo,
+  onAction,
+  isSelected = false,
+  onToggleSelection,
+}: RepoCardProps) => {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
 
@@ -73,10 +82,30 @@ export const RepoCard = ({ repo, onAction }: RepoCardProps) => {
       : displayPath;
 
   return (
-    <div className="p-3 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900/50 hover:border-violet-300 dark:hover:border-violet-700 transition-colors">
+    <div
+      className={`p-3 border rounded-lg bg-white dark:bg-zinc-900/50 transition-colors ${
+        isSelected
+          ? "border-violet-500 dark:border-violet-500 ring-2 ring-violet-200 dark:ring-violet-900/50"
+          : "border-zinc-200 dark:border-zinc-800 hover:border-violet-300 dark:hover:border-violet-700"
+      }`}
+    >
       {/* Header */}
       <div className="flex items-start gap-2 mb-2">
-        <FolderGit2 className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
+        {onToggleSelection && (
+          <button
+            type="button"
+            onClick={() => onToggleSelection(repo.path)}
+            className="mt-0.5 text-zinc-400 hover:text-violet-500 dark:text-zinc-500 dark:hover:text-violet-400 transition-colors"
+            aria-label="Toggle selection"
+          >
+            {isSelected ? (
+              <CheckSquare className="w-4 h-4" />
+            ) : (
+              <Square className="w-4 h-4" />
+            )}
+          </button>
+        )}
+        <FolderGit2 className="w-4 h-4 text-zinc-500 mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">
           <h3 className="font-medium text-sm truncate" title={repo.name}>
             {repo.name}

@@ -14,6 +14,19 @@ import { RepoList } from "./components/repo-list";
 import { AgentView } from "./components/agent-view";
 import { TaskSidebar } from "./components/task-sidebar";
 import { DatabaseInfo } from "./components/database-info";
+import { HelpModal } from "./components/help-modal";
+
+// Generate deterministic session ID from repo path + prompt
+// This ensures the same conversation can be resumed across deployments
+const generateSessionId = async (repoPath: string, prompt: string): Promise<string> => {
+  const data = `${repoPath}::${prompt}`;
+  const encoder = new TextEncoder();
+  const dataBuffer = encoder.encode(data);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return `session-${hashHex.slice(0, 16)}`; // Use first 16 chars for readability
+};
 
 // Action prompts for pre-built actions
 const actionPrompts: Record<Exclude<TaskAction, "custom">, string> = {
@@ -34,6 +47,21 @@ export default function Home() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
 
+  // Filter state
+  const [frameworkFilter, setFrameworkFilter] = useState<string>("all");
+  const [versionFilter, setVersionFilter] = useState<string>("all");
+  const [typescriptFilter, setTypescriptFilter] = useState<string>("all");
+
+  // Handler to update framework filter and reset version filter
+  const handleFrameworkFilterChange = useCallback((value: string) => {
+    setFrameworkFilter(value);
+    // Reset version filter when framework changes
+    setVersionFilter("all");
+  }, []);
+
+  // Selection state
+  const [selectedRepos, setSelectedRepos] = useState<Set<string>>(new Set());
+
   // Task management state
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -46,6 +74,53 @@ export default function Home() {
 
   // Get active task
   const activeTask = tasks.find((t) => t.id === activeTaskId) || null;
+
+  // Filter repos based on filter state
+  const filteredRepos = repos.filter((repo) => {
+    // Framework filter
+    if (frameworkFilter !== "all" && repo.framework !== frameworkFilter) {
+      return false;
+    }
+
+    // TypeScript filter
+    if (typescriptFilter === "typescript" && !repo.hasTypescript) {
+      return false;
+    }
+    if (typescriptFilter === "javascript" && repo.hasTypescript) {
+      return false;
+    }
+
+    // Version filter (exact version match)
+    if (versionFilter !== "all") {
+      const cleanVersion = repo.frameworkVersion?.replace("^", "").replace("~", "") || "";
+      if (cleanVersion !== versionFilter) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Selection handlers
+  const handleToggleSelection = useCallback((repoPath: string) => {
+    setSelectedRepos((prev) => {
+      const next = new Set(prev);
+      if (next.has(repoPath)) {
+        next.delete(repoPath);
+      } else {
+        next.add(repoPath);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedRepos(new Set(filteredRepos.map((r) => r.path)));
+  }, [filteredRepos]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedRepos(new Set());
+  }, []);
 
   // Force periodic re-render when there are active tool calls (to update duration displays)
   useEffect(() => {
@@ -68,20 +143,11 @@ export default function Home() {
         if (tasksRes.ok) {
           const tasksData = await tasksRes.json();
           if (tasksData.tasks && tasksData.tasks.length > 0) {
-            // Restore Map objects for toolCalls
-            const restoredTasks = tasksData.tasks.map((task: AgentTask) => ({
-              ...task,
-              messages: task.messages.map((msg: ChatMessage) => ({
-                ...msg,
-                toolCalls: msg.toolCalls
-                  ? new Map(Object.entries(msg.toolCalls))
-                  : new Map(),
-              })),
-            }));
-            setTasks(restoredTasks);
+            // Messages now use metadata.toolCalls as objects, no Map conversion needed
+            setTasks(tasksData.tasks);
             // Set the first task as active if none is set
-            if (!activeTaskId && restoredTasks.length > 0) {
-              setActiveTaskId(restoredTasks[0].id);
+            if (!activeTaskId && tasksData.tasks.length > 0) {
+              setActiveTaskId(tasksData.tasks[0].id);
             }
           }
         }
@@ -108,22 +174,11 @@ export default function Home() {
   // Debounced save to database
   const saveTaskToDb = useCallback(async (task: AgentTask) => {
     try {
-      // For now, we'll send the entire task to be saved/updated
-      // The backend will handle the upsert logic
+      // Send task to be saved - messages already in proper format
       await fetch("/api/tasks/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          task: {
-            ...task,
-            messages: task.messages.map((msg) => ({
-              ...msg,
-              toolCalls: msg.toolCalls
-                ? Object.fromEntries(msg.toolCalls)
-                : {},
-            })),
-          },
-        }),
+        body: JSON.stringify({ task }),
       });
     } catch (error) {
       console.error("Failed to save task:", error);
@@ -211,6 +266,11 @@ export default function Home() {
           ? customPrompt || "Analyze this project."
           : actionPrompts[action];
 
+      // Generate deterministic session ID from repo path + initial prompt
+      // This allows resuming the same conversation across deployments
+      const sessionId = await generateSessionId(repo.path, prompt);
+      console.log(`[Task ${taskId}] Generated session ID:`, sessionId);
+
       // Create new task
       const newTask: AgentTask = {
         id: taskId,
@@ -224,6 +284,7 @@ export default function Home() {
         tokenCount: 0,
         terminalOutput: [],
         lastActivityTime: Date.now(),
+        sessionId, // Add deterministic session ID
       };
 
       // Add task and set as active
@@ -238,6 +299,7 @@ export default function Home() {
         id: `user-${Date.now()}`,
         role: "user",
         content: prompt,
+        createdAt: Date.now(),
       };
 
       const assistantMessageId = `assistant-${Date.now()}`;
@@ -245,10 +307,14 @@ export default function Home() {
         id: assistantMessageId,
         role: "assistant",
         content: "",
-        thinking: "",
-        toolCalls: new Map(),
-        summaries: [],
+        createdAt: Date.now(),
         isStreaming: true,
+        metadata: {
+          thinking: "",
+          toolCalls: {},
+          summaries: [],
+          lastUpdateTime: Date.now(),
+        },
       };
 
       // Update task with messages and set to running
@@ -269,20 +335,87 @@ export default function Home() {
         console.log(`[Task ${taskId}] Repo:`, repo.name);
         console.log(`[Task ${taskId}] Path:`, repo.path);
         console.log(`[Task ${taskId}] Action:`, action);
+        console.log(`[Task ${taskId}] Session ID:`, sessionId);
         
-        const res = await fetch("/api/agent", {
+        let res = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: prompt,
             workingDirectory: repo.path,
+            taskId, // Pass taskId so backend can persist messages
+            sessionId, // Pass deterministic session ID
           }),
         });
 
         if (!res.ok) {
           const errData = await res.json();
           console.error(`[Task ${taskId}] Request failed:`, errData);
-          throw new Error(errData.error || "Failed to run agent");
+          
+          // Handle 409 Conflict (agent busy/stuck)
+          if (res.status === 409) {
+            // If session was cleared due to stuck agent, retry with new session
+            if (errData.sessionCleared) {
+              console.log(`[Task ${taskId}] 🔥 Session was cleared (agent was stuck)`);
+              console.log(`[Task ${taskId}] Retrying with NEW session in 2 seconds...`);
+              
+              // Clear sessionId from task so new session is created
+              setTasks((prev) =>
+                prev.map((t) =>
+                  t.id === taskId ? { ...t, sessionId: undefined } : t
+                )
+              );
+              
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              // Generate new session ID
+              const newSessionId = await generateSessionId(repo.path, prompt + "-retry");
+              console.log(`[Task ${taskId}] New session ID:`, newSessionId);
+              
+              // Retry with new session
+              res = await fetch("/api/agent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  message: prompt,
+                  workingDirectory: repo.path,
+                  taskId,
+                  sessionId: newSessionId,
+                }),
+              });
+              
+              if (!res.ok) {
+                const retryErrData = await res.json();
+                console.error(`[Task ${taskId}] Retry with new session failed:`, retryErrData);
+                throw new Error(retryErrData.error || "Failed to run agent after session reset");
+              }
+            } else {
+              // Agent temporarily busy, retry same session
+              console.log(`[Task ${taskId}] Agent busy, will retry in 1 second...`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // Retry the request once
+              console.log(`[Task ${taskId}] Retrying agent request...`);
+              res = await fetch("/api/agent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  message: prompt,
+                  workingDirectory: repo.path,
+                  taskId,
+                  sessionId,
+                }),
+              });
+              
+              if (!res.ok) {
+                const retryErrData = await res.json();
+                console.error(`[Task ${taskId}] Retry failed:`, retryErrData);
+                throw new Error(retryErrData.error || "Failed to run agent after retry");
+              }
+            }
+          } else {
+            throw new Error(errData.error || "Failed to run agent");
+          }
         }
 
         console.log(`[Task ${taskId}] Response received, starting stream...`);
@@ -310,7 +443,9 @@ export default function Home() {
           updateTask((task) => ({
             ...task,
             messages: task.messages.map((msg) =>
-              msg.id === assistantMessageId ? updater(msg) : msg
+              msg.id === assistantMessageId 
+                ? { ...updater(msg), lastUpdateTime: Date.now() }
+                : msg
             ),
           }));
         };
@@ -366,15 +501,25 @@ export default function Home() {
                 case "thinking-delta":
                   updateAssistantMessage((msg) => ({
                     ...msg,
-                    thinking: (msg.thinking || "") + (data.text || ""),
+                    metadata: {
+                      ...msg.metadata,
+                      thinking: (msg.metadata?.thinking || "") + (data.text || ""),
+                      toolCalls: msg.metadata?.toolCalls || {},
+                      summaries: msg.metadata?.summaries || [],
+                    },
                   }));
                   break;
 
                 case "thinking-completed":
                   updateAssistantMessage((msg) => ({
                     ...msg,
-                    thinking:
-                      (msg.thinking || "") + ` ✓ (${data.thinkingDurationMs}ms)`,
+                    metadata: {
+                      ...msg.metadata,
+                      thinking:
+                        (msg.metadata?.thinking || "") + ` ✓ (${data.thinkingDurationMs}ms)`,
+                      toolCalls: msg.metadata?.toolCalls || {},
+                      summaries: msg.metadata?.summaries || [],
+                    },
                   }));
                   break;
 
@@ -387,11 +532,18 @@ export default function Home() {
                       ...data.toolCall,
                       startTime: Date.now(),
                     };
-                    updateAssistantMessage((msg) => {
-                      const newToolCalls = new Map(msg.toolCalls);
-                      newToolCalls.set(data.callId!, toolWithTime);
-                      return { ...msg, toolCalls: newToolCalls };
-                    });
+                    updateAssistantMessage((msg) => ({
+                      ...msg,
+                      metadata: {
+                        ...msg.metadata,
+                        toolCalls: {
+                          ...msg.metadata?.toolCalls,
+                          [data.callId!]: toolWithTime,
+                        },
+                        thinking: msg.metadata?.thinking,
+                        summaries: msg.metadata?.summaries || [],
+                      },
+                    }));
                     
                     // Track ALL tool calls in terminal output for visibility
                     const formatArgs = (args: Record<string, unknown> | undefined) => {
@@ -431,15 +583,24 @@ export default function Home() {
                       return next;
                     });
                     updateAssistantMessage((msg) => {
-                      const existingCall = msg.toolCalls?.get(data.callId!);
+                      const existingCall = msg.metadata?.toolCalls?.[data.callId!];
                       const toolWithTime = {
                         ...data.toolCall!,
                         startTime: existingCall?.startTime,
                         endTime: Date.now(),
                       };
-                      const newToolCalls = new Map(msg.toolCalls);
-                      newToolCalls.set(data.callId!, toolWithTime);
-                      return { ...msg, toolCalls: newToolCalls };
+                      return {
+                        ...msg,
+                        metadata: {
+                          ...msg.metadata,
+                          toolCalls: {
+                            ...msg.metadata?.toolCalls,
+                            [data.callId!]: toolWithTime,
+                          },
+                          thinking: msg.metadata?.thinking,
+                          summaries: msg.metadata?.summaries || [],
+                        },
+                      };
                     });
                     
                     // Update shell command output in terminal
@@ -473,7 +634,12 @@ export default function Home() {
                   if (data.summary) {
                     updateAssistantMessage((msg) => ({
                       ...msg,
-                      summaries: [...(msg.summaries || []), data.summary!],
+                      metadata: {
+                        ...msg.metadata,
+                        summaries: [...(msg.metadata?.summaries || []), data.summary!],
+                        toolCalls: msg.metadata?.toolCalls || {},
+                        thinking: msg.metadata?.thinking,
+                      },
                     }));
                   }
                   break;
@@ -546,7 +712,25 @@ export default function Home() {
         );
       }
     },
-    [queueTaskSave, saveTaskToDb]
+    [setTasks, queueTaskSave, setActiveToolCalls]
+  );
+
+  // Batch action handler
+  const handleBatchAction = useCallback(
+    async (action: TaskAction, customPrompt?: string) => {
+      const selectedReposList = repos.filter((r) => selectedRepos.has(r.path));
+      
+      // Run action on all selected repos
+      for (const repo of selectedReposList) {
+        await handleAction(repo, action, customPrompt);
+        // Small delay between spawning agents to avoid overwhelming the system
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      
+      // Clear selection after batch run
+      setSelectedRepos(new Set());
+    },
+    [repos, selectedRepos, handleAction]
   );
 
   // Send a follow-up message to an existing task
@@ -560,6 +744,7 @@ export default function Home() {
         id: `user-${Date.now()}`,
         role: "user",
         content: message,
+        createdAt: Date.now(),
       };
 
       const assistantMessageId = `assistant-${Date.now()}`;
@@ -567,10 +752,14 @@ export default function Home() {
         id: assistantMessageId,
         role: "assistant",
         content: "",
-        thinking: "",
-        toolCalls: new Map(),
-        summaries: [],
+        createdAt: Date.now(),
         isStreaming: true,
+        metadata: {
+          thinking: "",
+          toolCalls: {},
+          summaries: [],
+          lastUpdateTime: Date.now(),
+        },
       };
 
       // Update task with new messages and set to running
@@ -594,6 +783,7 @@ export default function Home() {
             message,
             sessionId: task.sessionId,
             workingDirectory: task.repoPath,
+            taskId, // Pass taskId so backend can persist messages
           }),
         });
 
@@ -624,7 +814,9 @@ export default function Home() {
           updateTask((task) => ({
             ...task,
             messages: task.messages.map((msg) =>
-              msg.id === assistantMessageId ? updater(msg) : msg
+              msg.id === assistantMessageId 
+                ? { ...updater(msg), lastUpdateTime: Date.now() }
+                : msg
             ),
           }));
         };
@@ -660,15 +852,25 @@ export default function Home() {
                 case "thinking-delta":
                   updateAssistantMessage((msg) => ({
                     ...msg,
-                    thinking: (msg.thinking || "") + (data.text || ""),
+                    metadata: {
+                      ...msg.metadata,
+                      thinking: (msg.metadata?.thinking || "") + (data.text || ""),
+                      toolCalls: msg.metadata?.toolCalls || {},
+                      summaries: msg.metadata?.summaries || [],
+                    },
                   }));
                   break;
 
                 case "thinking-completed":
                   updateAssistantMessage((msg) => ({
                     ...msg,
-                    thinking:
-                      (msg.thinking || "") + ` ✓ (${data.thinkingDurationMs}ms)`,
+                    metadata: {
+                      ...msg.metadata,
+                      thinking:
+                        (msg.metadata?.thinking || "") + ` ✓ (${data.thinkingDurationMs}ms)`,
+                      toolCalls: msg.metadata?.toolCalls || {},
+                      summaries: msg.metadata?.summaries || [],
+                    },
                   }));
                   break;
 
@@ -681,11 +883,18 @@ export default function Home() {
                       ...data.toolCall,
                       startTime: Date.now(),
                     };
-                    updateAssistantMessage((msg) => {
-                      const newToolCalls = new Map(msg.toolCalls);
-                      newToolCalls.set(data.callId!, toolWithTime);
-                      return { ...msg, toolCalls: newToolCalls };
-                    });
+                    updateAssistantMessage((msg) => ({
+                      ...msg,
+                      metadata: {
+                        ...msg.metadata,
+                        toolCalls: {
+                          ...msg.metadata?.toolCalls,
+                          [data.callId!]: toolWithTime,
+                        },
+                        thinking: msg.metadata?.thinking,
+                        summaries: msg.metadata?.summaries || [],
+                      },
+                    }));
                     
                     // Track ALL tool calls
                     const formatArgs = (args: Record<string, unknown> | undefined) => {
@@ -725,15 +934,24 @@ export default function Home() {
                       return next;
                     });
                     updateAssistantMessage((msg) => {
-                      const existingCall = msg.toolCalls?.get(data.callId!);
+                      const existingCall = msg.metadata?.toolCalls?.[data.callId!];
                       const toolWithTime = {
                         ...data.toolCall!,
                         startTime: existingCall?.startTime,
                         endTime: Date.now(),
                       };
-                      const newToolCalls = new Map(msg.toolCalls);
-                      newToolCalls.set(data.callId!, toolWithTime);
-                      return { ...msg, toolCalls: newToolCalls };
+                      return {
+                        ...msg,
+                        metadata: {
+                          ...msg.metadata,
+                          toolCalls: {
+                            ...msg.metadata?.toolCalls,
+                            [data.callId!]: toolWithTime,
+                          },
+                          thinking: msg.metadata?.thinking,
+                          summaries: msg.metadata?.summaries || [],
+                        },
+                      };
                     });
                     
                     // Update tool output
@@ -765,7 +983,12 @@ export default function Home() {
                   if (data.summary) {
                     updateAssistantMessage((msg) => ({
                       ...msg,
-                      summaries: [...(msg.summaries || []), data.summary!],
+                      metadata: {
+                        ...msg.metadata,
+                        summaries: [...(msg.metadata?.summaries || []), data.summary!],
+                        toolCalls: msg.metadata?.toolCalls || {},
+                        thinking: msg.metadata?.thinking,
+                      },
                     }));
                   }
                   break;
@@ -901,6 +1124,7 @@ export default function Home() {
                 🧪 Test Page
               </a>
               <DatabaseInfo />
+              <HelpModal />
             </div>
           </div>
         </div>
@@ -913,9 +1137,21 @@ export default function Home() {
           <RepoScanner onScan={handleScan} isScanning={isScanning} />
           <RepoList
             repos={repos}
+            filteredRepos={filteredRepos}
             scannedPath={scannedPath}
             error={scanError}
             onAction={handleAction}
+            frameworkFilter={frameworkFilter}
+            onFrameworkFilterChange={handleFrameworkFilterChange}
+            versionFilter={versionFilter}
+            onVersionFilterChange={setVersionFilter}
+            typescriptFilter={typescriptFilter}
+            onTypescriptFilterChange={setTypescriptFilter}
+            selectedRepos={selectedRepos}
+            onToggleSelection={handleToggleSelection}
+            onSelectAll={handleSelectAll}
+            onClearSelection={handleClearSelection}
+            onBatchAction={handleBatchAction}
           />
         </div>
 
