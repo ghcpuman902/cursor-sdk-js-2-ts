@@ -73,18 +73,29 @@ export const RepoList = ({
     )
   ).sort();
 
-  // Get all unique versions across all frameworks
-  const allVersions = Array.from(
-    new Set(
-      repos
-        .map((r) => r.frameworkVersion?.replace("^", "").replace("~", ""))
-        .filter((v): v is string => v !== undefined && v !== null)
-    )
-  ).sort((a, b) => {
-    const aNum = parseFloat(a);
-    const bNum = parseFloat(b);
-    return aNum - bNum;
-  });
+  // Group versions by framework
+  const versionsByFramework = repos.reduce<Record<string, Set<string>>>((acc, repo) => {
+    if (repo.framework && repo.frameworkVersion) {
+      const version = repo.frameworkVersion.replace("^", "").replace("~", "");
+      if (!acc[repo.framework]) {
+        acc[repo.framework] = new Set();
+      }
+      acc[repo.framework].add(version);
+    }
+    return acc;
+  }, {});
+
+  // Sort versions for each framework
+  const sortedVersionsByFramework = Object.entries(versionsByFramework).reduce<
+    Record<string, string[]>
+  >((acc, [framework, versions]) => {
+    acc[framework] = Array.from(versions).sort((a, b) => {
+      const aNum = parseFloat(a);
+      const bNum = parseFloat(b);
+      return aNum - bNum;
+    });
+    return acc;
+  }, {});
 
   // Get framework label with proper formatting
   const getFrameworkLabel = (framework: string): string => {
@@ -157,7 +168,7 @@ export const RepoList = ({
     }
   };
 
-  const activeFilterCount = frameworkFilter.length + versionFilter.length + typescriptFilter.length;
+  const activeFilterCount = versionFilter.length + typescriptFilter.length;
 
   // Toggle functions for multi-select
   const toggleFramework = (fw: string) => {
@@ -181,6 +192,25 @@ export const RepoList = ({
       onTypescriptFilterChange(typescriptFilter.filter((l) => l !== lang));
     } else {
       onTypescriptFilterChange([...typescriptFilter, lang]);
+    }
+  };
+
+  const toggleAllFrameworkVersions = (framework: string) => {
+    const frameworkVersions = sortedVersionsByFramework[framework] || [];
+    const allSelected = frameworkVersions.every((v) => versionFilter.includes(v));
+    
+    if (allSelected) {
+      // Deselect all versions of this framework
+      onVersionFilterChange(versionFilter.filter((v) => !frameworkVersions.includes(v)));
+    } else {
+      // Select all versions of this framework
+      const newVersions = [...versionFilter];
+      frameworkVersions.forEach((v) => {
+        if (!newVersions.includes(v)) {
+          newVersions.push(v);
+        }
+      });
+      onVersionFilterChange(newVersions);
     }
   };
 
@@ -276,65 +306,77 @@ export const RepoList = ({
           {/* Filter Panel */}
           {showFilters && (
             <div className="mb-3 p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 space-y-2">
-              {/* Framework Capsules */}
-              <div>
-                <label className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 block mb-1.5">
-                  Frameworks
-                </label>
-                <div className="flex flex-wrap gap-1">
-                  {availableFrameworks.map((fw) => {
-                    const count = repos.filter((r) => r.framework === fw).length;
-                    const isActive = frameworkFilter.includes(fw);
-                    return (
-                      <button
-                        key={fw}
-                        type="button"
-                        onClick={() => toggleFramework(fw)}
-                        className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${
-                          isActive
-                            ? "bg-violet-500 text-white"
-                            : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:border-violet-400 dark:hover:border-violet-600"
-                        }`}
-                        aria-label={`Filter by ${fw}`}
-                      >
-                        {getFrameworkLabel(fw)} ({count})
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {/* Version Groups by Framework */}
+              {Object.entries(sortedVersionsByFramework).map(([framework, versions]) => {
+                if (versions.length === 0) return null;
+                
+                const frameworkBadges: Record<string, string> = {
+                  nextjs: "https://img.shields.io/badge/Next.js-black?logo=next.js&logoColor=white",
+                  react: "https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black",
+                  vue: "https://img.shields.io/badge/Vue-4FC08D?logo=vue.js&logoColor=white",
+                  angular: "https://img.shields.io/badge/Angular-DD0031?logo=angular&logoColor=white",
+                  svelte: "https://img.shields.io/badge/Svelte-FF3E00?logo=svelte&logoColor=white",
+                };
 
-              {/* Version Capsules */}
-              {allVersions.length > 0 && (
-                <div>
-                  <label className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 block mb-1.5">
-                    Versions
-                  </label>
-                  <div className="flex flex-wrap gap-1">
-                    {allVersions.map((version) => {
-                      const count = repos.filter(
-                        (r) => r.frameworkVersion?.replace("^", "").replace("~", "") === version
-                      ).length;
-                      const isActive = versionFilter.includes(version);
-                      return (
-                        <button
-                          key={version}
-                          type="button"
-                          onClick={() => toggleVersion(version)}
-                          className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${
-                            isActive
-                              ? "bg-violet-500 text-white"
-                              : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:border-violet-400 dark:hover:border-violet-600"
-                          }`}
-                          aria-label={`Filter by version ${version}`}
-                        >
-                          v{version} ({count})
-                        </button>
-                      );
-                    })}
+                const frameworkVersions = versions;
+                const allSelected = frameworkVersions.every((v) => versionFilter.includes(v));
+
+                return (
+                  <div key={framework}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {frameworkBadges[framework] && (
+                        <img
+                          src={frameworkBadges[framework]}
+                          alt={`${getFrameworkLabel(framework)} badge`}
+                          className="h-4"
+                        />
+                      )}
+                      {!frameworkBadges[framework] && (
+                        <span className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400">
+                          {getFrameworkLabel(framework)}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => toggleAllFrameworkVersions(framework)}
+                        className={`text-[10px] font-medium transition-colors underline ${
+                          allSelected
+                            ? "text-violet-600 dark:text-violet-400"
+                            : "text-zinc-500 dark:text-zinc-400 hover:text-violet-600 dark:hover:text-violet-400"
+                        }`}
+                        aria-label={`Toggle all ${getFrameworkLabel(framework)} versions`}
+                      >
+                        {allSelected ? "Deselect All" : "Select All"}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1 ml-5">
+                      {versions.map((version) => {
+                        const count = repos.filter(
+                          (r) =>
+                            r.framework === framework &&
+                            r.frameworkVersion?.replace("^", "").replace("~", "") === version
+                        ).length;
+                        const isActive = versionFilter.includes(version);
+                        return (
+                          <button
+                            key={version}
+                            type="button"
+                            onClick={() => toggleVersion(version)}
+                            className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${
+                              isActive
+                                ? "bg-violet-500 text-white"
+                                : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:border-violet-400 dark:hover:border-violet-600"
+                            }`}
+                            aria-label={`Filter by ${getFrameworkLabel(framework)} version ${version}`}
+                          >
+                            v{version} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })}
 
               {/* Language Capsules */}
               <div>
@@ -378,7 +420,6 @@ export const RepoList = ({
                   <button
                     type="button"
                     onClick={() => {
-                      onFrameworkFilterChange([]);
                       onVersionFilterChange([]);
                       onTypescriptFilterChange([]);
                     }}
