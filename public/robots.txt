@@ -1,0 +1,10 @@
+# Multi-Repo Agent Manager
+# Local development tool - not intended for web crawling
+
+User-agent: *
+Disallow: /api/
+Disallow: /_next/
+Allow: /
+
+# Sitemap (if deployed for documentation)
+# Sitemap: https://your-domain.com/sitemap.xml

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Terminal, Loader2 } from "lucide-react";
 
 export default function TestPage() {
-  const [workingDir, setWorkingDir] = useState(process.cwd ? "" : "/Users/manglekuo/dev");
+  const [workingDir, setWorkingDir] = useState(process.cwd ? process.cwd() : "/Users/manglekuo/dev");
   const [prompt, setPrompt] = useState("List all files in the current directory");
   const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
   const [isStreaming, setIsStreaming] = useState(false);

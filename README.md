@@ -1,145 +1,169 @@
-# Multi-Repo Agent Manager
+<div align="center">
 
-A Next.js web application that leverages the Cursor SDK to manage and maintain multiple code repositories in parallel using AI agents.
+# 🤖 Multi-Repo Agent Manager
+
+**AI-Powered Repository Maintenance at Scale**
+
+Manage and maintain multiple code repositories in parallel using autonomous AI agents powered by the Cursor SDK.
+
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwind-css)](https://tailwindcss.com/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+</div>
+
+---
+![Multi-Repo Agent Manager](docs/screenshots/main-interface.png)
+
+
+## ⚠️ Important Security Notice
+
+**This application is designed for LOCAL USE ONLY. Download and run on your local machine. Use at your own risk.**
+
+- AI agents have **file system access** to modify code in your repositories
+- Your terminal/IDE will **prompt for home folder access** when you run `pnpm run dev`
+- By default, agents can access your **entire home directory** (`~/Users/username` on Mac, `C:\Users\username` on Windows)
+- **Only use on repositories you trust** and are comfortable letting AI modify
+- **Always use version control** (git) so you can review and revert changes
+
+### 🔒 Restricting Agent Access to a Specific Folder
+
+If you prefer to limit agent access to a specific folder instead of your entire home directory:
+
+1. Open `app/api/agent/route.ts`
+2. Find the line with the comment: `// Gets ~/Users/username on Mac, C:\Users\username on Windows`
+3. Update it to use your preferred directory path (e.g., `~/dev/safe-projects`)
+
+**Note:** This restriction applies only to where *agents* can work. The frontend scanner UI will still allow you to browse and scan any user-specified path.
+
+---
 
 ## 🌟 Features
 
-- **Repository Scanner**: Automatically discover Node.js/JavaScript projects in any directory
-- **Parallel Agent Execution**: Run multiple AI agents simultaneously, each in its own repository workspace
-- **Pre-built Actions**: One-click maintenance tasks (TypeScript migration, framework upgrades, documentation, dependency updates)
-- **Real-time Streaming**: Watch agent activity live via Server-Sent Events
-- **Persistent Chat History**: All tasks and conversations are saved locally using SQLite - restart the app without losing progress
-- **Multi-turn Conversations**: Continue conversations with agents across sessions
+- **🔍 Repository Scanner**: Automatically discover Node.js/JavaScript projects in any directory
+- **⚡ Parallel Agent Execution**: Run multiple AI agents simultaneously across different repositories
+- **🎯 Pre-built Actions**: TypeScript migration, framework upgrades, documentation generation, dependency updates, custom prompts
+- **💾 SQLite Persistence**: All tasks and chat history saved locally (`~/.cursor-sdk-manager/tasks.db`)
+- **🔄 Multi-turn Conversations**: Continue conversations with agents across sessions
+- **📡 Real-time Streaming**: Watch agent thinking and actions live
+
+![Multi-Repo Agent Manager](docs/screenshots/main-interface.png)
+
+---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ and pnpm installed
-- Cursor API key from [https://app.cursor.sh](https://app.cursor.sh)
+- **Node.js** 18 or higher ([Download](https://nodejs.org/))
+- **pnpm** package manager ([Install](https://pnpm.io/installation))
+- **Cursor API Key** from [app.cursor.sh](https://app.cursor.sh/settings)
 
 ### Installation
 
-1. Clone the repository and install dependencies:
+1. **Clone and install:**
 
 ```bash
+git clone https://github.com/cursor-ai/multi-repo-agent-manager.git
+cd multi-repo-agent-manager
 pnpm install
 ```
 
-2. Set up your Cursor API Key:
+2. **Configure API key:**
 
-Create a `.env.local` file in the project root:
+Create a `.env.local` file:
 
 ```bash
 echo "CURSOR_API_KEY=your_api_key_here" > .env.local
 ```
 
-Replace `your_api_key_here` with your actual Cursor API key.
+Get your API key from [https://app.cursor.sh/settings](https://app.cursor.sh/settings)
 
-3. Run the development server:
-
-```bash
-pnpm dev
-```
-
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## 📊 Data Persistence
-
-All task data is automatically persisted using **SQLite**, a lightweight, file-based database perfect for local applications.
-
-### Storage Location
-
-- Database file: `~/.cursor-sdk-manager/tasks.db`
-- Stored in your home directory, outside the project folder
-- Persists across app restarts and system reboots
-
-### What's Stored
-
-- ✅ All agent tasks (status, timestamps, metadata)
-- ✅ Complete chat history (messages, tool calls, thinking)
-- ✅ Terminal output and activity logs
-- ✅ Token usage statistics
-
-### Benefits
-
-- **No data loss**: Restart the app anytime without losing work
-- **Fast**: SQLite is optimized for local read/write operations
-- **Simple**: No database server setup required
-- **Portable**: Single `.db` file you can backup or move
-- **Concurrent**: Multiple tasks can save data simultaneously
-
-### Database Management
-
-The database is automatically created on first run. No manual setup needed!
-
-To reset your data, simply delete the database file:
+3. **Run the app:**
 
 ```bash
-rm ~/.cursor-sdk-manager/tasks.db
+pnpm run dev
 ```
+
+4. **Grant permissions:**
+
+When prompted by your terminal or IDE, grant access to your home folder (or see security notice above to restrict access).
+
+5. **Open browser:**
+
+Navigate to [http://localhost:3088](http://localhost:3088)
+
+---
 
 ## 💡 Usage
 
 ### 1. Scan for Repositories
 
-- Select a root directory (e.g., `~/dev`, `~/projects`)
-- Click "Scan" to discover all Node.js projects
-- View detected projects with their framework and TypeScript status
+- Select a root directory (e.g., `~/dev`, `~/projects`, or custom path)
+- Click "Scan" to discover all Node.js/JavaScript projects
+- View detected projects with framework badges and TypeScript indicators
 
 ### 2. Run Actions
 
 Choose from 5 pre-built actions for any repository:
 
-- **Upgrade to TypeScript**: Convert JavaScript projects to TypeScript
-- **Upgrade Framework**: Update Next.js, React, Vue, etc. to latest version
-- **Summarize Codebase**: Generate comprehensive README.md
-- **Update Dependencies**: Upgrade outdated packages
-- **Custom Prompt**: Run any custom maintenance task
+| Action | Description |
+|--------|-------------|
+| **🔄 Upgrade to TypeScript** | Convert JavaScript projects to TypeScript |
+| **⬆️ Upgrade Framework** | Update Next.js, React, Vue, etc. to latest version |
+| **📝 Summarize Codebase** | Generate comprehensive README.md |
+| **📦 Update Dependencies** | Upgrade outdated packages |
+| **✨ Custom Prompt** | Run any custom maintenance task |
 
 ### 3. Monitor Progress
 
 - View real-time agent output in the center panel
-- Switch between multiple running tasks using tabs
+- Switch between multiple running tasks using tabs in the sidebar
 - See thinking process, tool calls, and responses
 - Track token usage and completion status
 
-## 🏗️ Architecture
+---
 
-### Tech Stack
+## 🏗️ Tech Stack
 
 - **Next.js 16** - React framework with App Router
-- **React 19** - UI library
-- **TypeScript** - Type safety
+- **React 19** - UI library with server components
+- **TypeScript 5** - Type safety
 - **Tailwind CSS 4** - Modern styling
 - **@cursor-ai/january** - Cursor Agent SDK
-- **better-sqlite3** - Fast, synchronous SQLite database
-- **Lucide React** - Icons
+- **better-sqlite3** - Fast SQLite database
+- **Shadcn UI** - Beautiful component library
 
-### Key Components
-
-- `/app/page.tsx` - Main UI with repo scanner, agent view, and task sidebar
-- `/app/api/agent/route.ts` - Agent execution API with SSE streaming
-- `/app/api/tasks/` - Task persistence endpoints
-- `/lib/db.ts` - SQLite database operations
-- `/lib/types.ts` - TypeScript type definitions
-
-### Data Flow
-
-1. User selects directory → Scanner finds repos → Display in list
-2. User clicks action → Create task → Save to DB
-3. Agent spawns in repo directory → Stream updates → Save to DB
-4. Real-time UI updates → Task tracked in sidebar → Persisted on disk
-5. On restart → Load tasks from DB → Restore complete state
+---
 
 ## 🔧 API Endpoints
 
 - `POST /api/scan-repos` - Scan directory for repositories
-- `POST /api/agent` - Create/run Cursor agent with working directory
+- `POST /api/agent` - Create/run Cursor agent with SSE streaming
 - `GET /api/tasks` - Load all persisted tasks
 - `POST /api/tasks/save` - Save or update a task
 - `DELETE /api/tasks/:id` - Delete a specific task
-- `DELETE /api/tasks` - Clear all completed tasks
+
+---
+
+## 📊 Data Persistence
+
+All task data is stored in **SQLite** at `~/.cursor-sdk-manager/tasks.db`
+
+**What's stored:**
+- All agent tasks (status, timestamps, metadata)
+- Complete chat history (messages, tool calls, thinking)
+- Terminal output and activity logs
+- Token usage statistics
+
+**To reset data:**
+```bash
+rm ~/.cursor-sdk-manager/tasks.db
+```
+
+---
 
 ## 🎯 Use Cases
 
@@ -149,14 +173,52 @@ Choose from 5 pre-built actions for any repository:
 - Keep dependencies up-to-date across your portfolio
 - Run custom automation tasks on multiple codebases
 
-## 📝 Notes
+---
 
-- Designed for **local laptop usage**, not for deployment to Vercel
-- Each agent runs in an **isolated workspace directory**
-- Agents can work on **completely different codebases** simultaneously
-- Chat history persists **across restarts** - pick up where you left off
-- Task data is **debounced** to minimize database writes during streaming
+## ❓ FAQ
 
-## 🔐 Privacy & Security
+**Q: Can I deploy this to Vercel/production?**  
+A: No. This app is designed for local development only. Agents need write access to your local filesystem.
 
-All data is stored locally on your machine. Nothing is sent to external databases or cloud storage (except API calls to Cursor for AI functionality).
+**Q: How much does it cost?**  
+A: Costs depend on Cursor API usage. Token consumption varies by task complexity. Monitor usage in your Cursor dashboard.
+
+**Q: Can agents modify my code?**  
+A: Yes, agents have full file system access to the working directory. Always use git to track and review changes.
+
+**Q: Can I run this on Windows?**  
+A: Yes, but ensure Node.js and pnpm are installed. Some path handling may need adjustment.
+
+**Q: How many agents can run simultaneously?**  
+A: Technically unlimited, but 3-5 agents is recommended for best performance.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **[Cursor SDK](https://github.com/cursor-ai/january)** - The amazing SDK powering this project
+- **[Next.js](https://nextjs.org/)** - The React framework
+- **[Shadcn UI](https://ui.shadcn.com/)** - Beautiful UI components
+- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS framework
+
+---
+
+<div align="center">
+
+Made with ❤️ by the Cursor community
+
+⭐ **Star this repo** if you find it useful!
+
+</div>

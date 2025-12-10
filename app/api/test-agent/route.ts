@@ -175,8 +175,8 @@ export async function POST(req: Request) {
                 console.log(`[${updateCount}] TOOL-CALL-COMPLETED:`, {
                   callId: update.callId,
                   status: update.toolCall?.result?.status,
-                  hasValue: !!update.toolCall?.result?.value,
-                  hasError: !!update.toolCall?.result?.error,
+                  hasValue: update.toolCall?.result?.status === "success" && !!update.toolCall?.result?.value,
+                  hasError: update.toolCall?.result?.status === "error" && !!update.toolCall?.result?.error,
                 });
               } else if (updateType === "summary") {
                 console.log(`[${updateCount}] SUMMARY:`, update.summary?.substring(0, 100));

@@ -1,0 +1,21 @@
+/* TEAM */
+
+Project: Multi-Repo Agent Manager
+Site: https://github.com/cursor-ai/multi-repo-agent-manager
+Description: AI-powered repository maintenance at scale
+Location: Global
+
+/* THANKS */
+
+Cursor SDK team for the amazing @cursor-ai/january package
+Next.js team for the incredible framework
+Shadcn for the beautiful UI components
+Open source community for continuous inspiration
+
+/* SITE */
+
+Last update: 2025/12/10
+Language: English
+Standards: HTML5, CSS3, JavaScript ES2024, TypeScript 5
+Components: React 19, Next.js 16, Tailwind CSS 4
+IDE: Cursor
