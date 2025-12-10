@@ -26,7 +26,7 @@ This is a **hackathon-style experimental project** built on top of **[@cursor-ai
 
 - **Non-Production Alpha Feature**: `@cursor-ai/january` is in early alpha and not production-ready
 - **Requires Alpha Access**: You need to be enrolled in Cursor's alpha program to use this SDK
-- **API Key Required**: Obtain from [https://cursor.com/dashboard?tab=integrations](https://https://cursor.com/dashboard?tab=integrations)
+- **API Key Required**: Obtain from [https://cursor.com/dashboard?tab=integrations](https://cursor.com/dashboard?tab=integrations)
 - **API Instability**: The SDK API can change at any time without notice
 - **Reliability**: Expect bugs, breaking changes, and potential instability
 - **No Official Support**: This is an experimental showcase, not a production tool
@@ -72,7 +72,7 @@ If you prefer to limit agent access to a specific folder instead of your entire 
 - **🔍 Repository Scanner**: Automatically discover Node.js/JavaScript projects in any directory
 - **⚡ Parallel Agent Execution**: Run multiple AI agents simultaneously across different repositories
 - **🎯 Pre-built Actions**: TypeScript migration, framework upgrades, documentation generation, dependency updates, custom prompts
-- **💾 SQLite Persistence**: All tasks and chat history saved locally (`~/.cursor-sdk-manager/tasks.db`)
+- **💾 JSON Persistence**: All tasks and chat history saved locally (`~/.cursor-sdk-manager/tasks.json`)
 - **🔄 Multi-turn Conversations**: Continue conversations with agents across sessions
 - **📡 Real-time Streaming**: Watch agent thinking and actions live
 
@@ -93,8 +93,8 @@ If you prefer to limit agent access to a specific folder instead of your entire 
 1. **Clone and install:**
 
 ```bash
-git clone https://github.com/cursor-ai/multi-repo-agent-manager.git
-cd multi-repo-agent-manager
+git clone https://github.com/ghcpuman902/cursor-sdk-js-2-ts.git
+cd cursor-sdk-js-2-ts
 pnpm install
 ```
 
@@ -160,7 +160,7 @@ Choose from 5 pre-built actions for any repository:
 - **TypeScript 5** - Type safety
 - **Tailwind CSS 4** - Modern styling
 - **@cursor-ai/january** - Cursor Agent SDK
-- **better-sqlite3** - Fast SQLite database
+- **JSON Storage** - Lightweight file-based persistence
 - **Shadcn UI** - Beautiful component library
 
 ---
@@ -177,7 +177,9 @@ Choose from 5 pre-built actions for any repository:
 
 ## 📊 Data Persistence
 
-All task data is stored in **SQLite** at `~/.cursor-sdk-manager/tasks.db`
+All task data is stored as **JSON files** in `~/.cursor-sdk-manager/`:
+- `tasks.json` - Agent tasks with messages and tool calls
+- `scanned-repos.json` - Cached repository scan results
 
 **What's stored:**
 - All agent tasks (status, timestamps, metadata)
@@ -187,7 +189,7 @@ All task data is stored in **SQLite** at `~/.cursor-sdk-manager/tasks.db`
 
 **To reset data:**
 ```bash
-rm ~/.cursor-sdk-manager/tasks.db
+rm ~/.cursor-sdk-manager/*.json
 ```
 
 ---
@@ -244,7 +246,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-Made with ❤️ by the Cursor community
+Made with ❤️ by Mangle Kuo
 
 ⭐ **Star this repo** if you find it useful!
 
