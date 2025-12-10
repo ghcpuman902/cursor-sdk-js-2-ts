@@ -51,6 +51,7 @@ export default function Home() {
   const [frameworkFilter, setFrameworkFilter] = useState<string>("all");
   const [versionFilter, setVersionFilter] = useState<string>("all");
   const [typescriptFilter, setTypescriptFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Handler to update framework filter and reset version filter
   const handleFrameworkFilterChange = useCallback((value: string) => {
@@ -77,6 +78,17 @@ export default function Home() {
 
   // Filter repos based on filter state
   const filteredRepos = repos.filter((repo) => {
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchesName = repo.name.toLowerCase().includes(query);
+      const matchesPath = repo.path.toLowerCase().includes(query);
+      const matchesFramework = repo.framework?.toLowerCase().includes(query);
+      if (!matchesName && !matchesPath && !matchesFramework) {
+        return false;
+      }
+    }
+
     // Framework filter
     if (frameworkFilter !== "all" && repo.framework !== frameworkFilter) {
       return false;
@@ -1147,6 +1159,8 @@ export default function Home() {
             onVersionFilterChange={setVersionFilter}
             typescriptFilter={typescriptFilter}
             onTypescriptFilterChange={setTypescriptFilter}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
             selectedRepos={selectedRepos}
             onToggleSelection={handleToggleSelection}
             onSelectAll={handleSelectAll}

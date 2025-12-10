@@ -13,6 +13,7 @@ import {
   FileText,
   Package,
   MessageSquare,
+  Search,
 } from "lucide-react";
 import type { RepoInfo, TaskAction } from "@/lib/types";
 import { RepoCard } from "./repo-card";
@@ -29,6 +30,8 @@ interface RepoListProps {
   onVersionFilterChange: (value: string) => void;
   typescriptFilter: string;
   onTypescriptFilterChange: (value: string) => void;
+  searchQuery: string;
+  onSearchQueryChange: (value: string) => void;
   selectedRepos: Set<string>;
   onToggleSelection: (repoPath: string) => void;
   onSelectAll: () => void;
@@ -48,6 +51,8 @@ export const RepoList = ({
   onVersionFilterChange,
   typescriptFilter,
   onTypescriptFilterChange,
+  searchQuery,
+  onSearchQueryChange,
   selectedRepos,
   onToggleSelection,
   onSelectAll,
@@ -179,13 +184,70 @@ export const RepoList = ({
   // Repos list
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-3">
-          {/* Header with Filter Toggle */}
-          <div className="flex items-center justify-between mb-3 px-1">
+      {/* Sticky Header with Search and Select All */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="p-3 space-y-2">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
+              placeholder="Search repos by name, path, or framework..."
+              className="w-full pl-8 pr-3 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => onSearchQueryChange("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="w-3 h-3 text-zinc-400 dark:text-zinc-500" />
+              </button>
+            )}
+          </div>
+
+          {/* Top Bar with Check All, Count, and Filter */}
+          <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
+              {filteredRepos.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedRepos.size === filteredRepos.length) {
+                      onClearSelection();
+                    } else {
+                      onSelectAll();
+                    }
+                  }}
+                  className="flex items-center gap-1 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+                  aria-label="Toggle select all"
+                >
+                  {selectedRepos.size === filteredRepos.length && filteredRepos.length > 0 ? (
+                    <CheckSquare className="w-3.5 h-3.5" />
+                  ) : (
+                    <Square className="w-3.5 h-3.5" />
+                  )}
+                  Select All
+                </button>
+              )}
               <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
                 {filteredRepos.length} / {repos.length} project{repos.length !== 1 ? "s" : ""}
+              </span>
+              {selectedRepos.size > 0 && (
+                <span className="text-[10px] font-medium text-violet-600 dark:text-violet-400">
+                  ({selectedRepos.size} selected)
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono truncate max-w-[100px]"
+                title={scannedPath}
+              >
+                {scannedPath.replace(process.env.HOME || "~", "~")}
               </span>
               <button
                 type="button"
@@ -202,14 +264,13 @@ export const RepoList = ({
                 )}
               </button>
             </div>
-            <span
-              className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono truncate max-w-[100px]"
-              title={scannedPath}
-            >
-              {scannedPath.replace(process.env.HOME || "~", "~")}
-            </span>
           </div>
+        </div>
+      </div>
 
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-3">
           {/* Filter Panel */}
           {showFilters && (
             <div className="mb-3 p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 space-y-3">
@@ -336,36 +397,6 @@ export const RepoList = ({
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Selection Header */}
-          {filteredRepos.length > 0 && (
-            <div className="flex items-center justify-between mb-2 px-1">
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedRepos.size === filteredRepos.length) {
-                    onClearSelection();
-                  } else {
-                    onSelectAll();
-                  }
-                }}
-                className="flex items-center gap-1 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
-                aria-label="Toggle select all"
-              >
-                {selectedRepos.size === filteredRepos.length && filteredRepos.length > 0 ? (
-                  <CheckSquare className="w-3.5 h-3.5" />
-                ) : (
-                  <Square className="w-3.5 h-3.5" />
-                )}
-                Select All
-              </button>
-              {selectedRepos.size > 0 && (
-                <span className="text-[10px] font-medium text-violet-600 dark:text-violet-400">
-                  {selectedRepos.size} selected
-                </span>
-              )}
             </div>
           )}
 
