@@ -15,6 +15,33 @@ Manage and maintain multiple code repositories in parallel using autonomous AI a
 </div>
 
 ---
+
+## 🚧 Experimental Hackathon Project
+
+> **Built at [Build with Cursor London](https://www.cursor.com/events) (Dec 9, 2024)**
+
+This is a **hackathon-style experimental project** built on top of **[@cursor-ai/january](https://www.npmjs.com/package/@cursor-ai/january)**, an alpha-stage Node.js SDK that brings Cursor's AI agent capabilities outside of the IDE.
+
+### ⚠️ Important Limitations
+
+- **Non-Production Alpha Feature**: `@cursor-ai/january` is in early alpha and not production-ready
+- **Requires Alpha Access**: You need to be enrolled in Cursor's alpha program to use this SDK
+- **API Key Required**: Obtain from [https://cursor.com/dashboard?tab=integrations](https://https://cursor.com/dashboard?tab=integrations)
+- **API Instability**: The SDK API can change at any time without notice
+- **Reliability**: Expect bugs, breaking changes, and potential instability
+- **No Official Support**: This is an experimental showcase, not a production tool
+
+### What is @cursor-ai/january?
+
+A Node.js SDK that enables Cursor's agent capabilities without the IDE interface:
+- **Repository Analysis**: Read and understand codebases
+- **Cursor Rules Support**: Respect `.cursor/rules/*.mdc` and workspace configurations
+- **Tool Execution**: Web search, CLI commands, file operations
+- **Agent Autonomy**: Multi-step reasoning and task execution
+
+⚠️ not for production use cases.
+
+---
 ![Multi-Repo Agent Manager](docs/screenshots/main-interface.png)
 
 
