@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs";
-import type { AgentTask, ChatMessage, ToolCall } from "./types";
+import type { AgentTask } from "./types";
 
 // Storage directory - stored in user's home directory for persistence
 const getStorageDir = () => {
@@ -36,7 +36,7 @@ interface DataStore {
   }>;
 }
 
-let dataStore: DataStore = {
+const dataStore: DataStore = {
   tasks: [],
   scannedRepos: [],
 };

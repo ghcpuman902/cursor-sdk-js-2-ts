@@ -56,7 +56,7 @@ function renderToolCall(toolCall: ToolCall): void {
 
 	// Show args (truncate long values)
 	console.log("  Args:");
-	const args = toolCall.args as Record<string, any> | undefined;
+	const args = toolCall.args as Record<string, unknown> | undefined;
 	for (const [key, value] of Object.entries(args ?? {})) {
 		if (key === "toolCallId") continue; // Skip internal ID
 		const valueStr =
@@ -81,11 +81,11 @@ function renderToolCall(toolCall: ToolCall): void {
 					root.childrenDirs.length + root.childrenFiles.length;
 				console.log(`    ${totalEntries} entries:`);
 				const allEntries = [
-					...root.childrenDirs.map((d: any) => ({
+					...root.childrenDirs.map((d: { absPath: string }) => ({
 						type: "directory",
 						name: d.absPath.split("/").pop(),
 					})),
-					...root.childrenFiles.map((f: any) => ({
+					...root.childrenFiles.map((f: { name: string }) => ({
 						type: "file",
 						name: f.name,
 					})),

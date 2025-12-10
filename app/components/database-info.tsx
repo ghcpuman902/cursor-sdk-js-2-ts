@@ -66,7 +66,7 @@ export const DatabaseInfo = () => {
     if (showInfo && !dbInfo) {
       fetchDbInfo();
     }
-  }, [showInfo]);
+  }, [showInfo]); // eslint-disable-line react-hooks/exhaustive-deps -- Only fetch when modal opens, not when dbInfo changes
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => {

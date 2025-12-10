@@ -13,7 +13,7 @@ import {
   ExternalLink,
   Send,
 } from "lucide-react";
-import type { ChatMessage, ToolCall, AgentTask } from "@/lib/types";
+import type { ToolCall, AgentTask } from "@/lib/types";
 
 // Tool emoji mapping
 const toolEmojis: Record<string, string> = {
@@ -39,12 +39,22 @@ interface ToolCallDisplayProps {
 
 const ToolCallDisplay = ({ toolCall, isActive }: ToolCallDisplayProps) => {
   const emoji = toolEmojis[toolCall.type] || "🔧";
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  
+  // Update current time when active
+  useEffect(() => {
+    if (!isActive) return;
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isActive]);
   
   // Calculate duration and detect if stuck
   const duration = toolCall.endTime 
     ? toolCall.endTime - (toolCall.startTime || 0)
     : isActive 
-    ? Date.now() - (toolCall.startTime || Date.now())
+    ? currentTime - (toolCall.startTime || currentTime)
     : 0;
   
   const isStuck = isActive && duration > 30000; // 30 seconds
@@ -196,12 +206,22 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage, onKillSession 
 
     // Find the last streaming message
     const lastMessage = task.messages[task.messages.length - 1];
-    if (!lastMessage?.isStreaming || !lastMessage.metadata?.lastUpdateTime) {
+    if (!lastMessage?.isStreaming) {
+      // If not streaming, reset stuck state
+      setIsStuck(false);
+      setStuckDuration(0);
+      return;
+    }
+
+    // Check for lastUpdateTime at message level
+    const lastUpdateTime = lastMessage.lastUpdateTime;
+    if (!lastUpdateTime) {
+      // No lastUpdateTime tracked yet
       return;
     }
 
     const checkStuck = () => {
-      const timeSinceLastUpdate = Date.now() - (lastMessage.metadata?.lastUpdateTime || Date.now());
+      const timeSinceLastUpdate = Date.now() - lastUpdateTime;
       const secondsStuck = Math.floor(timeSinceLastUpdate / 1000);
       
       if (secondsStuck >= 10) {
@@ -218,7 +238,7 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage, onKillSession 
     const interval = setInterval(checkStuck, 1000);
     
     return () => clearInterval(interval);
-  }, [task]);
+  }, [task, task?.messages, task?.messages?.length]);
 
   // Empty state
   if (!task) {
@@ -241,7 +261,8 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage, onKillSession 
 
   const handleOpenInCursor = () => {
     // Open the repo in Cursor using the cursor:// protocol
-    const cursorUrl = `cursor://file/${task.repoPath}`;
+    // Add windowId parameter to force opening in a new window
+    const cursorUrl = `cursor://file/${task.repoPath}?windowId=_blank`;
     window.open(cursorUrl, "_blank");
   };
 
@@ -504,7 +525,7 @@ export const AgentView = ({ task, activeToolCalls, onSendMessage, onKillSession 
                         }}
                         className="px-3 py-1.5 text-xs font-medium bg-amber-200 hover:bg-amber-300 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-900 dark:text-amber-100 rounded transition-colors"
                       >
-                        Send "Continue"
+                        Send &ldquo;Continue&rdquo;
                       </button>
                       <button
                         type="button"

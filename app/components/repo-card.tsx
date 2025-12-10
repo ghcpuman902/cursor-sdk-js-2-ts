@@ -12,6 +12,7 @@ import {
   Square,
 } from "lucide-react";
 import type { RepoInfo, TaskAction } from "@/lib/types";
+import { actionPrompts } from "@/app/page";
 
 interface RepoCardProps {
   repo: RepoInfo;
@@ -190,27 +191,27 @@ export const RepoCard = ({
         <ActionButton
           icon={<FileCode2 className="w-3 h-3" />}
           label="TS"
-          title="Convert to TypeScript"
+          title={"Convert to TypeScript"}
           onClick={() => handleAction("upgrade-typescript")}
           disabled={repo.hasTypescript}
         />
         <ActionButton
           icon={<ArrowUpCircle className="w-3 h-3" />}
           label="Upgrade"
-          title="Upgrade framework"
+          title={actionPrompts["upgrade-framework"]}
           onClick={() => handleAction("upgrade-framework")}
           disabled={!repo.framework}
         />
         <ActionButton
           icon={<FileText className="w-3 h-3" />}
           label="README"
-          title="Generate README"
+          title={actionPrompts["summarize"]}
           onClick={() => handleAction("summarize")}
         />
         <ActionButton
           icon={<Package className="w-3 h-3" />}
           label="Deps"
-          title="Update dependencies"
+          title={actionPrompts["update-deps"]}
           onClick={() => handleAction("update-deps")}
         />
         <ActionButton

@@ -29,11 +29,11 @@ const generateSessionId = async (repoPath: string, prompt: string): Promise<stri
 };
 
 // Action prompts for pre-built actions
-const actionPrompts: Record<Exclude<TaskAction, "custom">, string> = {
+export const actionPrompts: Record<Exclude<TaskAction, "custom">, string> = {
   "upgrade-typescript":
-    "Convert this JavaScript project to TypeScript. Add tsconfig.json if missing, rename .js files to .ts/.tsx as appropriate, add type annotations to functions and variables. Ensure the project builds without errors.",
+    "Convert this JavaScript project to TypeScript. Add tsconfig.json if missing, rename .js files to .ts/.tsx as appropriate, add type annotations to functions and variables. Ensure the project has latest lockfile and builds without errors.",
   "upgrade-framework":
-    "Analyze this project and upgrade the main framework (Next.js, React, Vue, etc.) to the latest stable version. Update related dependencies and fix any breaking changes. Run build to verify everything works.",
+    "Analyze this project and upgrade the main framework (Next.js, React, Vue, etc.) to the latest stable version. Update related dependencies and fix any breaking changes. Ensure the project has latest lockfile and builds without errors.",
   summarize:
     "Analyze this codebase thoroughly and generate a comprehensive README.md with: project overview, tech stack, folder structure, setup instructions, available scripts, and key features. Be detailed but concise.",
   "update-deps":
@@ -48,17 +48,10 @@ export default function Home() {
   const [scanError, setScanError] = useState<string | null>(null);
 
   // Filter state
-  const [frameworkFilter, setFrameworkFilter] = useState<string>("all");
-  const [versionFilter, setVersionFilter] = useState<string>("all");
-  const [typescriptFilter, setTypescriptFilter] = useState<string>("all");
+  const [frameworkFilter, setFrameworkFilter] = useState<string[]>([]);
+  const [versionFilter, setVersionFilter] = useState<string[]>([]);
+  const [typescriptFilter, setTypescriptFilter] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-  // Handler to update framework filter and reset version filter
-  const handleFrameworkFilterChange = useCallback((value: string) => {
-    setFrameworkFilter(value);
-    // Reset version filter when framework changes
-    setVersionFilter("all");
-  }, []);
 
   // Selection state
   const [selectedRepos, setSelectedRepos] = useState<Set<string>>(new Set());
@@ -89,23 +82,25 @@ export default function Home() {
       }
     }
 
-    // Framework filter
-    if (frameworkFilter !== "all" && repo.framework !== frameworkFilter) {
+    // Framework filter (multi-select)
+    if (frameworkFilter.length > 0 && !frameworkFilter.includes(repo.framework || "")) {
       return false;
     }
 
-    // TypeScript filter
-    if (typescriptFilter === "typescript" && !repo.hasTypescript) {
-      return false;
-    }
-    if (typescriptFilter === "javascript" && repo.hasTypescript) {
-      return false;
+    // TypeScript filter (multi-select)
+    if (typescriptFilter.length > 0) {
+      const hasTs = repo.hasTypescript;
+      const matchesTs = typescriptFilter.includes("typescript") && hasTs;
+      const matchesJs = typescriptFilter.includes("javascript") && !hasTs;
+      if (!matchesTs && !matchesJs) {
+        return false;
+      }
     }
 
-    // Version filter (exact version match)
-    if (versionFilter !== "all") {
+    // Version filter (multi-select)
+    if (versionFilter.length > 0) {
       const cleanVersion = repo.frameworkVersion?.replace("^", "").replace("~", "") || "";
-      if (cleanVersion !== versionFilter) {
+      if (!versionFilter.includes(cleanVersion)) {
         return false;
       }
     }
@@ -181,7 +176,7 @@ export default function Home() {
     };
 
     loadPersistedData();
-  }, []); // Only run once on mount
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- Only run once on mount
 
   // Debounced save to database
   const saveTaskToDb = useCallback(async (task: AgentTask) => {
@@ -325,7 +320,6 @@ export default function Home() {
           thinking: "",
           toolCalls: {},
           summaries: [],
-          lastUpdateTime: Date.now(),
         },
       };
 
@@ -686,7 +680,7 @@ export default function Home() {
                   }));
                   break;
               }
-            } catch (parseError) {
+            } catch {
               console.error(`[Task ${taskId}] Failed to parse SSE data:`, line.substring(0, 100));
             }
           }
@@ -724,7 +718,7 @@ export default function Home() {
         );
       }
     },
-    [setTasks, queueTaskSave, setActiveToolCalls]
+    [setTasks, queueTaskSave, setActiveToolCalls, saveTaskToDb]
   );
 
   // Batch action handler
@@ -770,7 +764,6 @@ export default function Home() {
           thinking: "",
           toolCalls: {},
           summaries: [],
-          lastUpdateTime: Date.now(),
         },
       };
 
@@ -1154,7 +1147,7 @@ export default function Home() {
             error={scanError}
             onAction={handleAction}
             frameworkFilter={frameworkFilter}
-            onFrameworkFilterChange={handleFrameworkFilterChange}
+            onFrameworkFilterChange={setFrameworkFilter}
             versionFilter={versionFilter}
             onVersionFilterChange={setVersionFilter}
             typescriptFilter={typescriptFilter}

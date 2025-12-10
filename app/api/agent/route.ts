@@ -1,14 +1,14 @@
-import { CursorAgent, type WorkingLocation } from "@cursor-ai/january";
+import { CursorAgent, ToolCall, type WorkingLocation } from "@cursor-ai/january";
 import { randomUUID } from "crypto";
 import { homedir } from "os";
 import { dbOperations } from "@/lib/db";
-import type { AgentTask, ChatMessage, ToolCall } from "@/lib/types";
+import type { AgentTask, ChatMessage } from "@/lib/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 600;
 
 // Store agent instances by session ID for multi-turn conversations
-const agentSessions = new Map<
+const agentSessions = new Map<  
   string,
   { 
     agent: CursorAgent; 
@@ -347,8 +347,8 @@ ${message}`;
             createdAt: Date.now(),
             metadata: {
               lastUpdateTime: Date.now(),
-            },
-          };
+            } as { lastUpdateTime: number },
+          } as ChatMessage;
           console.log("📝 Created user message:", currentUserMessage.id);
         }
         
@@ -450,21 +450,21 @@ ${message}`;
           const streamTimeout = setTimeout(() => {
             console.error("=== STREAM TIMEOUT (5 minutes) ===");
             sendError(new Error("Agent stream timed out after 5 minutes"));
-          }, 5 * 60 * 1000); // 5 minutes
+          }, 10 * 60 * 1000); // 10 minutes
 
           // Also add a heartbeat to detect if updates stop coming
           const heartbeatInterval = setInterval(() => {
             const timeSinceLastUpdate = Date.now() - lastUpdateTime;
             const secondsStuck = Math.floor(timeSinceLastUpdate / 1000);
             
-            if (timeSinceLastUpdate > 10000) { // 10 seconds with no updates
+            if (timeSinceLastUpdate > 60000) { // 1 minute with no updates
               console.warn(`⚠️ No updates for ${secondsStuck}s - stream may be stuck`);
               console.warn(`Last update count: ${updateCount}`);
             }
             
-            // AUTO-KILL if stuck for 2 minutes (SDK is probably hung)
-            if (timeSinceLastUpdate > 120000) { // 120 seconds = 2 minutes
-              console.error(`🔥 AGENT HUNG FOR 2 MINUTES - FORCE KILLING`);
+            // AUTO-KILL if stuck for 5 minutes (SDK is probably hung)
+            if (timeSinceLastUpdate > 300000) { // 5*60 seconds = 5 minutes
+              console.error(`🔥 AGENT HUNG FOR 5 MINUTES - FORCE KILLING`);
               console.error(`Last update was at count ${updateCount}`);
               clearInterval(heartbeatInterval);
               clearTimeout(streamTimeout);
@@ -480,7 +480,7 @@ ${message}`;
               }
               
               // Send error and close stream
-              sendError(new Error("Agent hung for 2 minutes with no updates. Task cancelled."));
+              sendError(new Error("Agent hung for 5 minutes with no updates. Task cancelled."));
             }
           }, 5000); // Check every 5 seconds
 
@@ -523,14 +523,14 @@ ${message}`;
                         toolCalls: {},
                         summaries: [],
                         lastUpdateTime: Date.now(),
-                      },
-                    };
+                      } as { thinking: string; toolCalls: Record<string, ToolCall>; summaries: string[]; lastUpdateTime: number },
+                    } as ChatMessage;
                   } else {
                     if (!currentAssistantMessage.metadata) {
                       currentAssistantMessage.metadata = { toolCalls: {}, summaries: [] };
                     }
                     currentAssistantMessage.metadata.thinking = (currentAssistantMessage.metadata.thinking || '') + (update.text || '');
-                    currentAssistantMessage.metadata.lastUpdateTime = Date.now();
+                    (currentAssistantMessage.metadata as { lastUpdateTime: number }).lastUpdateTime = Date.now();
                   }
                 } else if (update.type === 'text-delta') {
                   // Add text to current assistant message
@@ -545,14 +545,14 @@ ${message}`;
                         toolCalls: {},
                         summaries: [],
                         lastUpdateTime: Date.now(),
-                      },
-                    };
+                      } as { toolCalls: Record<string, ToolCall>; summaries: string[]; lastUpdateTime: number },
+                    } as ChatMessage;
                   } else {
                     currentAssistantMessage.content += update.text || '';
                     if (!currentAssistantMessage.metadata) {
                       currentAssistantMessage.metadata = { toolCalls: {}, summaries: [] };
                     }
-                    currentAssistantMessage.metadata.lastUpdateTime = Date.now();
+                    (currentAssistantMessage.metadata as { lastUpdateTime: number }).lastUpdateTime = Date.now();
                   }
                 } else if (update.type === 'tool-call-started') {
                   // Add tool call to current message
@@ -567,8 +567,8 @@ ${message}`;
                         toolCalls: {},
                         summaries: [],
                         lastUpdateTime: Date.now(),
-                      },
-                    };
+                      } as { toolCalls: Record<string, ToolCall>; summaries: string[]; lastUpdateTime: number },
+                    } as ChatMessage;
                   }
                   if (update.callId && update.toolCall) {
                     if (!currentAssistantMessage.metadata) {
@@ -579,7 +579,7 @@ ${message}`;
                       args: update.toolCall.args,
                       startTime: Date.now(),
                     };
-                    currentAssistantMessage.metadata.lastUpdateTime = Date.now();
+                    (currentAssistantMessage.metadata as { lastUpdateTime: number }).lastUpdateTime = Date.now();
                   }
                 } else if (update.type === 'tool-call-completed') {
                   // Update tool call with result
@@ -591,7 +591,7 @@ ${message}`;
                     if (existingCall) {
                       existingCall.result = update.toolCall?.result;
                       existingCall.endTime = Date.now();
-                      currentAssistantMessage.metadata.lastUpdateTime = Date.now();
+                      (currentAssistantMessage.metadata as { lastUpdateTime: number }).lastUpdateTime = Date.now();
                     }
                   }
                 } else if (update.type === 'summary') {
@@ -604,7 +604,7 @@ ${message}`;
                       currentAssistantMessage.metadata.summaries = [];
                     }
                     currentAssistantMessage.metadata.summaries.push(update.summary);
-                    currentAssistantMessage.metadata.lastUpdateTime = Date.now();
+                    (currentAssistantMessage.metadata as { lastUpdateTime: number }).lastUpdateTime = Date.now();
                   }
                 } else if (update.type === 'token-delta') {
                   // Update token count (token-delta adds tokens incrementally)

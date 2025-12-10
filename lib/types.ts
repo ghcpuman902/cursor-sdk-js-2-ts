@@ -85,11 +85,12 @@ export interface ChatMessage {
     thinking?: string;
     toolCalls?: Record<string, ToolCall>; // Store as Record for JSON serialization
     summaries?: string[];
-    lastUpdateTime?: number;
   };
   // Streaming flag
   isStreaming?: boolean;
   createdAt?: number;
+  // Track when message was last updated (for stuck detection)
+  lastUpdateTime?: number;
 }
 
 // Action prompt templates

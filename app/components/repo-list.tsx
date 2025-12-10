@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { RepoInfo, TaskAction } from "@/lib/types";
 import { RepoCard } from "./repo-card";
+import { actionPrompts } from "@/app/page";
 
 interface RepoListProps {
   repos: RepoInfo[];
@@ -24,12 +25,12 @@ interface RepoListProps {
   scannedPath: string | null;
   error: string | null;
   onAction: (repo: RepoInfo, action: TaskAction, customPrompt?: string) => void;
-  frameworkFilter: string;
-  onFrameworkFilterChange: (value: string) => void;
-  versionFilter: string;
-  onVersionFilterChange: (value: string) => void;
-  typescriptFilter: string;
-  onTypescriptFilterChange: (value: string) => void;
+  frameworkFilter: string[];
+  onFrameworkFilterChange: (value: string[]) => void;
+  versionFilter: string[];
+  onVersionFilterChange: (value: string[]) => void;
+  typescriptFilter: string[];
+  onTypescriptFilterChange: (value: string[]) => void;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   selectedRepos: Set<string>;
@@ -72,30 +73,18 @@ export const RepoList = ({
     )
   ).sort();
 
-  // Group repos by framework and version for detailed filtering
-  const frameworkVersions = repos.reduce((acc, repo) => {
-    if (repo.framework && repo.frameworkVersion) {
-      if (!acc[repo.framework]) {
-        acc[repo.framework] = new Set();
-      }
-      acc[repo.framework].add(repo.frameworkVersion.replace("^", "").replace("~", ""));
-    }
-    return acc;
-  }, {} as Record<string, Set<string>>);
-
-  // Get available versions for selected framework
-  const availableVersions = frameworkFilter !== "all" && frameworkVersions[frameworkFilter]
-    ? Array.from(frameworkVersions[frameworkFilter]).sort((a, b) => {
-        // Sort versions numerically
-        const aNum = parseFloat(a);
-        const bNum = parseFloat(b);
-        return aNum - bNum;
-      })
-    : [];
-
-  // Count repos by TypeScript usage
-  const tsCount = repos.filter((r) => r.hasTypescript).length;
-  const jsCount = repos.filter((r) => !r.hasTypescript).length;
+  // Get all unique versions across all frameworks
+  const allVersions = Array.from(
+    new Set(
+      repos
+        .map((r) => r.frameworkVersion?.replace("^", "").replace("~", ""))
+        .filter((v): v is string => v !== undefined && v !== null)
+    )
+  ).sort((a, b) => {
+    const aNum = parseFloat(a);
+    const bNum = parseFloat(b);
+    return aNum - bNum;
+  });
 
   // Get framework label with proper formatting
   const getFrameworkLabel = (framework: string): string => {
@@ -168,18 +157,32 @@ export const RepoList = ({
     }
   };
 
-  const activeFilterCount = [
-    frameworkFilter !== "all" ? 1 : 0,
-    versionFilter !== "all" ? 1 : 0,
-    typescriptFilter !== "all" ? 1 : 0,
-  ].reduce((a, b) => a + b, 0);
+  const activeFilterCount = frameworkFilter.length + versionFilter.length + typescriptFilter.length;
 
-  // Build active filter description for tooltip
-  const activeFilterDesc = [
-    frameworkFilter !== "all" ? getFrameworkLabel(frameworkFilter) : null,
-    versionFilter !== "all" ? `v${versionFilter}` : null,
-    typescriptFilter === "typescript" ? "TypeScript" : typescriptFilter === "javascript" ? "JavaScript" : null,
-  ].filter(Boolean).join(", ");
+  // Toggle functions for multi-select
+  const toggleFramework = (fw: string) => {
+    if (frameworkFilter.includes(fw)) {
+      onFrameworkFilterChange(frameworkFilter.filter((f) => f !== fw));
+    } else {
+      onFrameworkFilterChange([...frameworkFilter, fw]);
+    }
+  };
+
+  const toggleVersion = (ver: string) => {
+    if (versionFilter.includes(ver)) {
+      onVersionFilterChange(versionFilter.filter((v) => v !== ver));
+    } else {
+      onVersionFilterChange([...versionFilter, ver]);
+    }
+  };
+
+  const toggleLanguage = (lang: string) => {
+    if (typescriptFilter.includes(lang)) {
+      onTypescriptFilterChange(typescriptFilter.filter((l) => l !== lang));
+    } else {
+      onTypescriptFilterChange([...typescriptFilter, lang]);
+    }
+  };
 
   // Repos list
   return (
@@ -254,7 +257,6 @@ export const RepoList = ({
                 onClick={() => setShowFilters(!showFilters)}
                 className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                 aria-label="Toggle filters"
-                title={activeFilterCount > 0 ? `Active filters: ${activeFilterDesc}` : "Open filters"}
               >
                 <Filter className="w-3 h-3" />
                 {activeFilterCount > 0 && (
@@ -273,130 +275,119 @@ export const RepoList = ({
         <div className="p-3">
           {/* Filter Panel */}
           {showFilters && (
-            <div className="mb-3 p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 space-y-3">
-              {/* Quick Stats */}
-              <div className="pb-2 border-b border-zinc-200 dark:border-zinc-800">
-                <div className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 mb-1.5">
-                  Repository Summary
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[10px]">
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500 dark:text-zinc-400">Total:</span>
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">{repos.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500 dark:text-zinc-400">Frameworks:</span>
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">{availableFrameworks.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500 dark:text-zinc-400">TypeScript:</span>
-                    <span className="font-medium text-blue-600 dark:text-blue-400">{tsCount}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500 dark:text-zinc-400">JavaScript:</span>
-                    <span className="font-medium text-yellow-600 dark:text-yellow-400">{jsCount}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Framework Filter */}
+            <div className="mb-3 p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 space-y-2">
+              {/* Framework Capsules */}
               <div>
-                <label className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 block mb-1">
-                  Framework
+                <label className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 block mb-1.5">
+                  Frameworks
                 </label>
-                <select
-                  value={frameworkFilter}
-                  onChange={(e) => onFrameworkFilterChange(e.target.value)}
-                  className="w-full px-2 py-1 text-xs border border-zinc-200 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                >
-                  <option value="all">All Frameworks ({repos.length})</option>
+                <div className="flex flex-wrap gap-1">
                   {availableFrameworks.map((fw) => {
                     const count = repos.filter((r) => r.framework === fw).length;
+                    const isActive = frameworkFilter.includes(fw);
                     return (
-                      <option key={fw} value={fw}>
+                      <button
+                        key={fw}
+                        type="button"
+                        onClick={() => toggleFramework(fw)}
+                        className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${
+                          isActive
+                            ? "bg-violet-500 text-white"
+                            : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:border-violet-400 dark:hover:border-violet-600"
+                        }`}
+                        aria-label={`Filter by ${fw}`}
+                      >
                         {getFrameworkLabel(fw)} ({count})
-                      </option>
+                      </button>
                     );
                   })}
-                </select>
+                </div>
               </div>
 
-              {/* Version Filter - Only show if framework is selected */}
-              {frameworkFilter !== "all" && availableVersions.length > 0 && (
+              {/* Version Capsules */}
+              {allVersions.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 block mb-1">
-                    Version
+                  <label className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 block mb-1.5">
+                    Versions
                   </label>
-                  <select
-                    value={versionFilter}
-                    onChange={(e) => onVersionFilterChange(e.target.value)}
-                    className="w-full px-2 py-1 text-xs border border-zinc-200 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                  >
-                    <option value="all">
-                      All Versions ({repos.filter((r) => r.framework === frameworkFilter).length})
-                    </option>
-                    {availableVersions.map((version) => {
+                  <div className="flex flex-wrap gap-1">
+                    {allVersions.map((version) => {
                       const count = repos.filter(
-                        (r) =>
-                          r.framework === frameworkFilter &&
-                          r.frameworkVersion?.replace("^", "").replace("~", "") === version
+                        (r) => r.frameworkVersion?.replace("^", "").replace("~", "") === version
                       ).length;
+                      const isActive = versionFilter.includes(version);
                       return (
-                        <option key={version} value={version}>
+                        <button
+                          key={version}
+                          type="button"
+                          onClick={() => toggleVersion(version)}
+                          className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${
+                            isActive
+                              ? "bg-violet-500 text-white"
+                              : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:border-violet-400 dark:hover:border-violet-600"
+                          }`}
+                          aria-label={`Filter by version ${version}`}
+                        >
                           v{version} ({count})
-                        </option>
+                        </button>
                       );
                     })}
-                  </select>
+                  </div>
                 </div>
               )}
 
-              {/* TypeScript Filter */}
+              {/* Language Capsules */}
               <div>
-                <label className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 block mb-1">
-                  Language
+                <label className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 block mb-1.5">
+                  Languages
                 </label>
-                <select
-                  value={typescriptFilter}
-                  onChange={(e) => onTypescriptFilterChange(e.target.value)}
-                  className="w-full px-2 py-1 text-xs border border-zinc-200 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                >
-                  <option value="all">All Languages ({repos.length})</option>
-                  <option value="typescript">TypeScript Only ({tsCount})</option>
-                  <option value="javascript">JavaScript Only ({jsCount})</option>
-                </select>
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleLanguage("typescript")}
+                    className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${
+                      typescriptFilter.includes("typescript")
+                        ? "bg-blue-500 text-white"
+                        : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-600"
+                    }`}
+                    aria-label="Filter by TypeScript"
+                  >
+                    TypeScript ({repos.filter((r) => r.hasTypescript).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleLanguage("javascript")}
+                    className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${
+                      typescriptFilter.includes("javascript")
+                        ? "bg-yellow-500 text-white"
+                        : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:border-yellow-400 dark:hover:border-yellow-600"
+                    }`}
+                    aria-label="Filter by JavaScript"
+                  >
+                    JavaScript ({repos.filter((r) => !r.hasTypescript).length})
+                  </button>
+                </div>
               </div>
 
-              {/* Filter Results & Clear */}
-              <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
-                {activeFilterCount > 0 ? (
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-zinc-500 dark:text-zinc-400">
-                        Showing {filteredRepos.length} of {repos.length}
-                      </span>
-                      <span className="text-violet-600 dark:text-violet-400 font-medium">
-                        {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onFrameworkFilterChange("all");
-                        onVersionFilterChange("all");
-                        onTypescriptFilterChange("all");
-                      }}
-                      className="w-full px-2 py-1 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
-                    >
-                      Clear All Filters
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-[10px] text-center text-zinc-400 dark:text-zinc-500 py-1">
-                    No filters applied
-                  </div>
-                )}
-              </div>
+              {/* Clear Filters */}
+              {activeFilterCount > 0 && (
+                <div className="pt-1 flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                    Showing {filteredRepos.length} of {repos.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onFrameworkFilterChange([]);
+                      onVersionFilterChange([]);
+                      onTypescriptFilterChange([]);
+                    }}
+                    className="px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                  >
+                    Clear All ({activeFilterCount})
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -481,27 +472,32 @@ export const RepoList = ({
           <div className="flex flex-wrap gap-1">
             <BatchActionButton
               icon={<FileCode2 className="w-3 h-3" />}
-              label="TypeScript"
+              label="Upgrade TS"
+              legend={actionPrompts["upgrade-typescript"]}
               onClick={() => handleBatchAction("upgrade-typescript")}
             />
             <BatchActionButton
               icon={<ArrowUpCircle className="w-3 h-3" />}
-              label="Upgrade"
+                label="Upgrade Framework"
+              legend={actionPrompts["upgrade-framework"]}
               onClick={() => handleBatchAction("upgrade-framework")}
             />
             <BatchActionButton
               icon={<FileText className="w-3 h-3" />}
               label="README"
+              legend={actionPrompts["summarize"]}
               onClick={() => handleBatchAction("summarize")}
             />
             <BatchActionButton
               icon={<Package className="w-3 h-3" />}
               label="Deps"
+              legend={actionPrompts["update-deps"]}
               onClick={() => handleBatchAction("update-deps")}
             />
             <BatchActionButton
               icon={<MessageSquare className="w-3 h-3" />}
               label="Custom"
+              legend="Custom prompt"
               onClick={() => handleBatchAction("custom")}
               isActive={showBatchCustomInput}
             />
@@ -515,6 +511,7 @@ export const RepoList = ({
 interface BatchActionButtonProps {
   icon: React.ReactNode;
   label: string;
+  legend: string;
   onClick: () => void;
   isActive?: boolean;
 }
@@ -522,6 +519,7 @@ interface BatchActionButtonProps {
 const BatchActionButton = ({
   icon,
   label,
+  legend,
   onClick,
   isActive,
 }: BatchActionButtonProps) => (
@@ -534,6 +532,7 @@ const BatchActionButton = ({
         : "bg-white dark:bg-zinc-800 hover:bg-violet-100 dark:hover:bg-violet-900/30 hover:text-violet-600 dark:hover:text-violet-400 border border-zinc-200 dark:border-zinc-700"
     }`}
     aria-label={`Batch ${label}`}
+    title={legend}
   >
     {icon}
     {label}

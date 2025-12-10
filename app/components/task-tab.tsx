@@ -47,7 +47,7 @@ const ACTION_LABELS: Record<TaskAction, string> = {
 };
 
 export const TaskTab = ({ task, isActive, onSelect, onClose }: TaskTabProps) => {
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   // Update current time periodically to recalculate idle time
   useEffect(() => {
@@ -95,7 +95,6 @@ export const TaskTab = ({ task, isActive, onSelect, onClose }: TaskTabProps) => 
           : "hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-transparent"
       }`}
       aria-label={`Task: ${task.repoName} - ${task.action}`}
-      aria-selected={isActive}
       tabIndex={0}
     >
       {/* Status Icon */}

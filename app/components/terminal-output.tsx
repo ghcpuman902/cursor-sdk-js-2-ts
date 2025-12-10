@@ -14,7 +14,7 @@ export const TerminalOutput = ({
   lastActivityTime,
 }: TerminalOutputProps) => {
   const endRef = useRef<HTMLDivElement>(null);
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
